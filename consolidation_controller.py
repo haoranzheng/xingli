@@ -20,7 +20,8 @@ class ConsolidationController(mobase.IPluginTool):
     NAME = "星黎整合管理器"  # 修改为中文名称
     VERSION_URL = "https://your-server/modpack/version.json"  # 替换为你的版本查询接口
     ORDER_URL = "https://your-server/modpack/order.txt"        # 替换为你的排序文件接口
-    PLUGIN_UPDATE_URL = "https://your-server/plugins/consolidation_controller.py"  # 替换为插件更新文件的下载链接
+    PLUGIN_UPDATE_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/"  # 替换为插件更新文件的下载链接
+    PLUGIN_VERSION_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/"
     TUTORIAL_CATEGORIES = {
         "分类一": [
             {"name": "教程1", "url": "https://www.bilibili.com/video/BV1234567890"},
@@ -199,20 +200,36 @@ class ConsolidationController(mobase.IPluginTool):
 
     def update_plugin(self):
         try:
-            # 下载新插件
-            response = urllib.request.urlopen(self.PLUGIN_UPDATE_URL, timeout=10)
-            with open(__file__, "wb") as plugin_file:
-                plugin_file.write(response.read())
-            QMessageBox.information(
-                None,
-                "更新成功",
-                "插件已更新到最新版本。"
-            )
+            # 获取云端插件版本
+            with urllib.request.urlopen(self.PLUGIN_VERSION_URL, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                remote_version = data.get("version", "0.0.0")
+
+            # 获取本地插件版本
+            local_version = self.version().toString()
+
+            # 比较版本
+            if version.parse(remote_version) > version.parse(local_version):
+                # 下载新插件
+                with urllib.request.urlopen(self.PLUGIN_UPDATE_URL, timeout=10) as response:
+                    with open(__file__, "wb") as plugin_file:
+                        plugin_file.write(response.read())
+                QMessageBox.information(
+                    None,
+                    "更新成功",
+                    "插件已更新到最新版本: {}".format(remote_version)
+                )
+            else:
+                QMessageBox.information(
+                    None,
+                    "无需更新",
+                    "当前插件已是最新版本: {}".format(local_version)
+                )
         except urllib.error.URLError as e:
             QMessageBox.critical(
                 None,
                 "错误",
-                "更新插件失败: {}".format(str(e))
+                "检查插件更新失败: {}".format(str(e))
             )
         except Exception as e:
             QMessageBox.critical(
