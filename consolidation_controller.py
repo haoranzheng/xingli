@@ -201,9 +201,13 @@ class ConsolidationController(mobase.IPluginTool):
     def update_plugin(self):
         try:
             # 获取云端插件版本
-            with urllib.request.urlopen(self.PLUGIN_VERSION_URL, timeout=10) as response:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"
+            }
+            req = urllib.request.Request(self.PLUGIN_VERSION_URL, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode('utf-8'))
-                remote_version = data.get("version", "0.0.0")
+            remote_version = data.get("version", "0.0.0")
 
             # 获取本地插件版本
             local_version = self.version().toString()
@@ -211,7 +215,8 @@ class ConsolidationController(mobase.IPluginTool):
             # 比较版本
             if version.parse(remote_version) > version.parse(local_version):
                 # 下载新插件
-                with urllib.request.urlopen(self.PLUGIN_UPDATE_URL, timeout=10) as response:
+                req = urllib.request.Request(self.PLUGIN_UPDATE_URL, headers=headers)
+                with urllib.request.urlopen(req, timeout=10) as response:
                     with open(__file__, "wb") as plugin_file:
                         plugin_file.write(response.read())
                 QMessageBox.information(
