@@ -20,8 +20,8 @@ class ConsolidationController(mobase.IPluginTool):
     NAME = "星黎整合管理器"  # 修改为中文名称
     VERSION_URL = "https://your-server/modpack/version.json"  # 替换为你的版本查询接口
     ORDER_URL = "https://your-server/modpack/order.txt"        # 替换为你的排序文件接口
-    PLUGIN_UPDATE_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/"  # 替换为插件更新文件的下载链接
-    PLUGIN_VERSION_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/"
+    PLUGIN_UPDATE_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/download"  # 替换为插件更新文件的下载链接
+    PLUGIN_VERSION_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/version"
     TUTORIAL_CATEGORIES = {
         "分类一": [
             {"name": "教程1", "url": "https://www.bilibili.com/video/BV1234567890"},
