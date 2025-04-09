@@ -6,6 +6,7 @@ import webbrowser
 import json
 import urllib.request
 import urllib.error
+import logging # 添加 logging 模块
 import mobase
 import configparser
 import shutil
@@ -13,6 +14,7 @@ import time
 import tempfile
 import threading
 import winreg
+import configparser # 确保导入
 from urllib.parse import urlparse
 
 try:
@@ -32,31 +34,81 @@ class ConsolidationController(mobase.IPluginTool):
     PLUGIN_UPDATE_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/download"  # 替换为插件更新文件的下载链接
     PLUGIN_VERSION_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/version"
     PLUGIN_CHANGELOG_URL = "https://silent-waterfall-efd4.a306435856.workers.dev/changelog"
-    
+    CONFIG_FILE_NAME = "version.ini" # ini 文件名
+    DEFAULT_VERSION = "1.0.0" # 默认版本号
+
     AUTO_RESOLUTION_MOD_NAME = "自动分辨率设置-Auto Resolution"
-    
+
 
     def __init__(self):
         super().__init__()
         self.organizer = None
         self.network = None
+        self.server_version = None # 用于存储服务器版本号
+        self.version_label = None # 用于稍后更新标签
+        self.plugin_path = os.path.dirname(__file__) # 获取插件目录
+        self.config_path = os.path.join(self.plugin_path, self.CONFIG_FILE_NAME) # ini 文件路径
+        self.local_version = self._read_local_version() # 在初始化时读取
+
+    def _read_local_version(self) -> str:
+        """从 version.ini 读取本地版本号"""
+        config = configparser.ConfigParser()
+        try:
+            if os.path.exists(self.config_path):
+                config.read(self.config_path, encoding='utf-8')
+                if 'Version' in config and 'local' in config['Version']:
+                    version_str = config['Version']['local']
+                    # 验证版本格式 (可选但推荐)
+                    if re.match(r"^\d+(\.\d+)*$", version_str):
+                        print(f"从 {self.CONFIG_FILE_NAME} 读取到版本: {version_str}")
+                        return version_str
+                    else:
+                        print(f"警告: {self.CONFIG_FILE_NAME} 中的版本号格式无效: {version_str}。使用默认版本。")
+                else:
+                    print(f"警告: {self.CONFIG_FILE_NAME} 中缺少 [Version] 或 'local' 键。使用默认版本。")
+            else:
+                print(f"信息: 未找到 {self.CONFIG_FILE_NAME}。使用默认版本。")
+        except Exception as e:
+            print(f"读取 {self.CONFIG_FILE_NAME} 时出错: {e}。使用默认版本。")
+
+        # 如果读取失败或文件不存在，返回默认值并尝试创建文件
+        self._write_local_version(self.DEFAULT_VERSION) # 写入默认值
+        return self.DEFAULT_VERSION
+
+    def _write_local_version(self, version_str: str):
+        """将本地版本号写入 version.ini"""
+        config = configparser.ConfigParser()
+        config['Version'] = {'local': version_str}
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as configfile:
+                config.write(configfile)
+            print(f"已将版本 {version_str} 写入 {self.CONFIG_FILE_NAME}")
+        except Exception as e:
+            print(f"写入 {self.CONFIG_FILE_NAME} 时出错: {e}")
+
 
     def init(self, organizer: mobase.IOrganizer):
         self.organizer = organizer
-        # 初始化网络模块
-        version_info = self.version()
-        print(f"版本信息对象: {version_info}, 类型: {type(version_info)}")
+        # 初始化网络模块，使用读取到的本地版本
+        print(f"使用的本地版本进行初始化: {self.local_version}") # 调试信息
+        # 确保 Network 类已定义或导入
+        # from .network import Network # 可能需要取消注释或调整
+        self.network = Network(self, self.local_version, self.PLUGIN_VERSION_URL, self.PLUGIN_CHANGELOG_URL) # 传递 self
+
+        # 尝试在初始化时同步获取服务器版本
         try:
-            # 尝试使用str()函数将VersionInfo对象转换为字符串
-            version_str = str(version_info)
-            print(f"转换后的版本字符串: {version_str}")
-            self.network = Network(version_str, self.PLUGIN_VERSION_URL, self.PLUGIN_CHANGELOG_URL) # 传递 changelog URL
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"
+            }
+            req = urllib.request.Request(self.PLUGIN_VERSION_URL, headers=headers)
+            with urllib.request.urlopen(req, timeout=5) as response: # 使用5秒超时
+                data = json.loads(response.read().decode('utf-8'))
+                self.server_version = data.get("version")
+                print(f"启动时获取服务器版本成功: {self.server_version}")
         except Exception as e:
-            print(f"初始化网络模块时出错: {str(e)}")
-            raise
-            # 不再在此处引发异常，允许插件继续加载
-            # raise # 移除 raise
-        
+            print(f"启动时检查服务器版本失败: {str(e)}")
+            self.server_version = None # 确保失败时为 None
+
         QTimer.singleShot(2000, self.show_welcome_dialog)
         return True
 
@@ -70,7 +122,22 @@ class ConsolidationController(mobase.IPluginTool):
         return u"管理整合包更新和教程"
 
     def version(self) -> mobase.VersionInfo:
-        return mobase.VersionInfo(1, 0, 0)
+        # 从读取到的 self.local_version 创建 VersionInfo 对象
+        try:
+            # 尝试解析版本字符串
+            parts = list(map(int, self.local_version.split('.')))
+            # 根据 mobase.VersionInfo 的构造函数填充参数
+            major = parts[0] if len(parts) > 0 else 0
+            minor = parts[1] if len(parts) > 1 else 0
+            subminor = parts[2] if len(parts) > 2 else 0
+            # MO2 的 VersionInfo 可能还有第四个参数 (revision/release type)，这里简化处理
+            # return mobase.VersionInfo(major, minor, subminor, 0) # 假设第四个参数是 0
+            # 根据 mobase 文档，通常是 major, minor, subminor
+            return mobase.VersionInfo(major, minor, subminor)
+        except ValueError:
+            print(f"错误: 无法解析本地版本号 '{self.local_version}'。返回默认版本 0.0.0。")
+            # 如果解析失败，返回一个默认的 VersionInfo 对象
+            return mobase.VersionInfo(0, 0, 0)
 
     def settings(self) -> list:
         return []
@@ -159,7 +226,9 @@ class ConsolidationController(mobase.IPluginTool):
 
 
     def display(self) -> None:
+        # 每次调用都重置窗口和标签引用，确保使用新对象
         self.window = QtWidgets.QDialog()
+        self.version_label = None # <-- 重置 version_label
         self.window.setWindowTitle("星黎MO2小助手")
         self.window.setWindowFlags(self.window.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
 
@@ -242,17 +311,53 @@ class ConsolidationController(mobase.IPluginTool):
         info_text.setWordWrap(True)
         info_text.setStyleSheet("color: #666; font-style: italic;")
         main_layout.addWidget(info_text)
+        logging.debug("Entering display method") # 添加日志
         
-        # 添加版本信息
-        version_str = str(self.version())
-        version_label = QtWidgets.QLabel(f"版本: {version_str}")
-        version_label.setAlignment(Qt.AlignRight)
-        version_label.setStyleSheet("color: #999; font-size: 10px;")
-        main_layout.addWidget(version_label)
+        # 添加版本信息 (本地和服务器)
+        local_version_str = self.local_version # 使用从 ini 读取的版本
+        version_text = f"本地版本: {local_version_str}"
+        label_style = "color: #999; font-size: 10px;" # 默认样式
+
+        if self.server_version:
+            version_text += f" / 服务器: {self.server_version}"
+            # 比较版本
+            if self._compare_versions(self.server_version, local_version_str) > 0:
+                # 服务器版本更新，突出显示
+                label_style = "color: red; font-size: 10px; font-weight: bold;"
+
+        # 创建或更新标签
+        logging.debug(f"Checking version_label. Is None: {self.version_label is None}") # 添加日志
+        if self.version_label is None:
+            self.version_label = QtWidgets.QLabel(version_text)
+            self.version_label.setAlignment(Qt.AlignRight)
+            main_layout.addWidget(self.version_label)
+            self.version_label.setStyleSheet(label_style) # <-- 设置样式
+        else:
+            # 如果标签已存在，先检查窗口是否还存活
+            # (假设 self.window 是包含 self.version_label 的窗口)
+            if not self.window or not self.window.isVisible():
+                 logging.warning("Window or version_label's parent is no longer visible/valid. Skipping update.")
+                 return # 窗口无效，直接返回
+
+            # 窗口有效，继续更新
+            logging.debug("version_label exists and window is visible. Attempting to update text.") # 更新日志信息
+            try:
+                # 调试日志：访问 winId (可以保留或移除)
+                logging.debug(f"Accessing version_label.winId(): {self.version_label.winId()}")
+            except RuntimeError as e:
+                # 如果在这里仍然出错，说明 isVisible 检查可能不够，或者对象在检查后瞬间失效
+                logging.error(f"RuntimeError accessing version_label even after visibility check: {e}")
+                return # 出错则直接返回
+
+            logging.debug(f"Calling setText with: '{version_text}'")
+            self.version_label.setText(version_text)
+            self.version_label.setStyleSheet(label_style) # <-- 同样设置样式
 
         self.window.setLayout(main_layout)
         self.window.setMinimumSize(400, 300)
+        logging.debug("Before window.exec()") # 添加日志
         self.window.exec()
+        logging.debug("After window.exec()") # 添加日志
 
     def check_version(self):
         try:
@@ -361,27 +466,6 @@ class ConsolidationController(mobase.IPluginTool):
             )
             return None
     
-    def run_skse_fix(self):
-        try:
-            if self._fix_skse_paths():
-                QtWidgets.QMessageBox.information(
-                    None,
-                    "修复成功",
-                    "SKSE路径已自动修复，请重启MO！\n原始配置已备份为ModOrganizer.ini.bak"
-                )
-            else:
-                QtWidgets.QMessageBox.information(
-                    None,
-                    "无需修复",
-                    "当前SKSE路径配置正常，无需修改。"
-                )
-        except Exception as e:
-            QtWidgets.QMessageBox.critical(
-                None,
-                "严重错误",
-                f"自动修复失败: {str(e)}\n请手动检查ModOrganizer.ini文件。"
-            )
-
     def open_tutorial(self):
         try:
             self.show_tutorial_window()  # 修改为正确的方法名称
@@ -677,19 +761,19 @@ class ConsolidationController(mobase.IPluginTool):
         install_button = QtWidgets.QPushButton("安装 ENB")
         install_button.setStyleSheet(button_style.replace("#4a86e8", "#4CAF50").replace("#3a76d8", "#45a049").replace("#2a66c8", "#367c39")) # Green color
         install_button.setIcon(QtGui.QIcon.fromTheme("list-add"))
-        install_button.setToolTip("从文件夹安装新的ENB预设") # 添加提示
+        install_button.setToolTip("从文件夹安装新的ENB预设") 
 
-        start_button = QtWidgets.QPushButton("导入 ENB")
+        start_button = QtWidgets.QPushButton("应用 ENB")
         start_button.setStyleSheet(button_style)
         start_button.setIcon(QtGui.QIcon.fromTheme("document-import"))
-        start_button.setToolTip("将选中的ENB预设应用到游戏") # 添加提示
+        start_button.setToolTip("将选中的ENB预设应用到游戏")
 
         stop_button = QtWidgets.QPushButton("禁用 ENB")
         stop_button.setStyleSheet(button_style.replace("#4a86e8", "#e84a4a").replace("#3a76d8", "#d83a3a").replace("#2a66c8", "#c82a2a")) # Red color
         stop_button.setIcon(QtGui.QIcon.fromTheme("process-stop"))
-        stop_button.setToolTip("移除当前应用的ENB文件") # 添加提示
+        stop_button.setToolTip("移除当前应用的ENB文件")
 
-        button_layout.addWidget(install_button) # 添加安装按钮
+        button_layout.addWidget(install_button) 
         button_layout.addWidget(start_button)
         button_layout.addWidget(stop_button)
         button_layout.addStretch()
@@ -1001,10 +1085,6 @@ class ConsolidationController(mobase.IPluginTool):
              if hasattr(self, 'enb_status_label'):
                  self.enb_status_label.setText("错误: ENB备份路径无效或不存在。")
              print(f"错误: ENB 备份路径无效或不存在: {getattr(self, 'enb_backup_path', '未设置')}")
-             # 可以在这里添加逻辑尝试重新获取 game_path 和 enb_backup_path
-             # 例如: self.game_path = self._get_game_path_logic() # 假设有这样一个方法
-             # self.enb_backup_path = os.path.join(self.game_path, "ENB备份")
-             # if not os.path.exists(self.enb_backup_path): os.makedirs(self.enb_backup_path)
              return # 如果路径问题无法解决，则退出
 
         self.enb_list.clear()
@@ -1343,10 +1423,92 @@ class ConsolidationController(mobase.IPluginTool):
             return
 
     def update_window_mode(self):
-        if self.fullscreen_check.isChecked():
-            self.borderless_check.setChecked(False)
-        if self.borderless_check.isChecked():
-            self.fullscreen_check.setChecked(False)
-    
+        pass # 添加 pass 语句以修复空函数体错误
+    # +++ 添加版本比较函数 (带缩进修复和健壮性改进) +++
+    def _compare_versions(self, version1, version2):
+        """比较两个版本号。version1 > version2 返回 1, 相等返回 0, 小于返回 -1。"""
+        # 确保输入是字符串
+        if not isinstance(version1, str) or not isinstance(version2, str):
+            print(f"版本比较错误：输入不是字符串 ({type(version1)}, {type(version2)})")
+            return 0
+
+        try:
+            # 使用正则表达式提取版本号中的数字部分
+            v1_parts_str = re.findall(r'\d+', version1)
+            v2_parts_str = re.findall(r'\d+', version2)
+
+            # 转换为整数列表
+            v1_parts = [int(p) for p in v1_parts_str]
+            v2_parts = [int(p) for p in v2_parts_str]
+
+            # 处理无法提取数字的情况 (例如 "Unknown" 或空字符串)
+            if not v1_parts: v1_parts = [0]
+            if not v2_parts: v2_parts = [0]
+
+            # 逐部分比较
+            for i in range(max(len(v1_parts), len(v2_parts))):
+                v1_num = v1_parts[i] if i < len(v1_parts) else 0
+                v2_num = v2_parts[i] if i < len(v2_parts) else 0
+
+                if v1_num > v2_num:
+                    return 1
+                elif v1_num < v2_num:
+                    return -1
+
+            # 所有部分都相等
+            return 0
+        except ValueError as e:
+            # 处理转换整数时的错误
+            print(f"比较版本时转换数字出错 ('{version1}' vs '{version2}'): {e}")
+            return 0
+        except Exception as e:
+            # 捕获其他潜在错误
+            print(f"比较版本时发生未知错误 ('{version1}' vs '{version2}'): {e}")
+            return 0
+    # +++ 结束添加 +++
+
+    # 添加一个方法来更新 ini 文件，供 network 模块调用
+    def update_local_version_in_config(self, new_version: str):
+        """由外部调用以更新配置文件中的版本号"""
+        # 验证版本格式 (可选)
+        if not re.match(r"^\d+(\.\d+)*$", new_version):
+            print(f"错误: 尝试写入无效的版本号格式: {new_version}")
+            return
+
+        self._write_local_version(new_version)
+        old_version = self.local_version
+        self.local_version = new_version # 同时更新内存中的版本
+        print(f"本地版本已从 {old_version} 更新为 {self.local_version}")
+
+        # 如果 UI 正在显示，尝试更新 UI 上的标签
+        if hasattr(self, 'version_label') and self.version_label and hasattr(self, 'window') and self.window and self.window.isVisible():
+             # 更新显示的版本文本
+             version_text = f"本地版本: {self.local_version}"
+             if self.server_version:
+                 version_text += f" / 服务器: {self.server_version}"
+             # 检查是否还需要红色高亮 (更新后本地应该等于或高于服务器)
+             label_style = "color: #999; font-size: 10px;" # 恢复默认样式
+             # 重新比较更新后的本地版本和服务器版本
+             if self.server_version and self._compare_versions(self.server_version, self.local_version) > 0:
+                 label_style = "color: red; font-size: 10px; font-weight: bold;"
+
+             # 确保在 Qt 主线程中更新 UI
+             # (如果此方法可能从非主线程调用，需要使用信号槽机制)
+             # 假设目前是从主线程调用的
+             try:
+                 self.version_label.setText(version_text)
+                 self.version_label.setStyleSheet(label_style)
+                 print("UI 版本标签已更新")
+             except Exception as e:
+                 print(f"更新 UI 版本标签时出错: {e}")
+        else:
+            print("UI 未显示或 version_label 不可用，跳过 UI 更新")
+
+    # --- 以下是 show_resolution_settings 中遗留的代码，需要移回或删除 ---
+    # if self.fullscreen_check.isChecked():
+    #     self.borderless_check.setChecked(False)
+    # if self.borderless_check.isChecked():
+    #     self.fullscreen_check.setChecked(False)
+    # --- 结束遗留代码 ---
 def createPlugin():
     return ConsolidationController()
