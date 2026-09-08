@@ -1,0 +1,49 @@
++                                 message=str(manifest.get("message", "整合包更新提示尚未启用。") or "整合包更新提示尚未启用。"))
++            return
++        remote_pack_id = str(manifest.get("pack_id", "") or "")
++        if remote_pack_id != str(local.get("pack_id", "") or ""):
++            _publish_home_status(controller, "error", installed=installed, source=source_name,
++                                 message="远程整合包标识与本机不一致。")
++            return
++        latest = str(manifest.get("version", "") or "")
++        controller._modpack_update_manifest = dict(manifest)
++        if compare_versions(latest, installed) > 0:
++            _publish_home_status(controller, "update_available", installed=installed, latest=latest, source=source_name)
++            if prompt_when_new:
++                prompted = str(getattr(controller, "_modpack_update_prompted_version", "") or "")
++                if prompted != latest:
++                    controller._modpack_update_prompted_version = latest
++                    QTimer.singleShot(250, lambda: prompt_update(controller, manifest, automatic=True))
++        else:
++            _publish_home_status(controller, "up_to_date", installed=installed, latest=latest, source=source_name)
++
++    def on_failed(message):
++        controller._modpack_update_thread = None
++        _publish_home_status(controller, "error", installed=installed, message=str(message))
++
++    thread.checked.connect(on_checked)
++    thread.failed.connect(on_failed)
++    thread.start()
++
++
++def maybe_auto_check(controller) -> None:
++    _start_check(controller, prompt_when_new=True)
++
++
++def manual_check(controller) -> None:
++    _start_check(controller, prompt_when_new=True)
++
++
++def handle_home_action(controller) -> None:
++    status = getattr(controller, "_xingli_modpack_update_status", {}) or {}
++    if str(status.get("state", "")) == "update_available" and isinstance(getattr(controller, "_modpack_update_manifest", None), dict):
++        prompt_update(controller)
++        return
++    manual_check(controller)
+diff -ruN xingli_v201_base/xingli_Little_assistant/version.ini xingli_v202_work/xingli_Little_assistant/version.ini
+--- xingli_v201_base/xingli_Little_assistant/version.ini	2026-09-08 08:00:39.000000000 +0000
++++ xingli_v202_work/xingli_Little_assistant/version.ini	2026-09-08 09:07:53.267834055 +0000
+@@ -1,2 +1,2 @@
+ [Version]
+-local = 2.0.1
++local = 2.0.2
