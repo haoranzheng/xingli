@@ -1,0 +1,174 @@
+diff -ruN xingli_v201_base/xingli_Little_assistant/CHANGELOG_v2.0.2.md xingli_v202_work/xingli_Little_assistant/CHANGELOG_v2.0.2.md
+--- xingli_v201_base/xingli_Little_assistant/CHANGELOG_v2.0.2.md	1970-01-01 00:00:00.000000000 +0000
++++ xingli_v202_work/xingli_Little_assistant/CHANGELOG_v2.0.2.md	2026-09-08 09:07:53.397984156 +0000
+@@ -0,0 +1,9 @@
++# 星黎 MO2 小助手 v2.0.2
++
++- 新增“整合包内容更新”独立提示系统。
++- 整合包内容更新与助手自身更新完全分离。
++- 启动后可通过 Gitee 国内主源、GitHub 备用源检查整合包最新版本。
++- 发现新版本后主页显示橙色提示，并自动询问一次。
++- 用户确认后仅打开作者配置的网盘网页，不自动下载、安装或修改整合包。
++- 本机整合包版本优先读取 `modpack_release.json`；未配置时可回退到整合包健康基准中的版本。
++- 作者只需更新仓库 `modpack/latest.json` 即可发布新的内容更新提示。
+diff -ruN xingli_v201_base/xingli_Little_assistant/MODPACK_UPDATE_GUIDE_CN.md xingli_v202_work/xingli_Little_assistant/MODPACK_UPDATE_GUIDE_CN.md
+--- xingli_v201_base/xingli_Little_assistant/MODPACK_UPDATE_GUIDE_CN.md	1970-01-01 00:00:00.000000000 +0000
++++ xingli_v202_work/xingli_Little_assistant/MODPACK_UPDATE_GUIDE_CN.md	2026-09-08 09:07:07.982483382 +0000
+@@ -0,0 +1,47 @@
++# 星黎整合包更新提示
++
++整合包内容更新与星黎助手自身更新是两套独立机制。
++
++## 客户端本机版本
++
++编辑 `modpack_release.json`：
++
++```json
++{
++  "schema": 1,
++  "pack_id": "xingli-skyrim",
++  "name": "星黎整合包",
++  "installed_version": "3.0.0"
++}
++```
++
++整合包正式发布时，应把 `installed_version` 写成该整合包实际版本。
++如果这里为空，星黎助手不会猜测版本；如果用户已经建立“整合包检查”基准，则会使用基准中的整合包版本作为后备。
++
++## 远程最新版本
++
++GitHub/Gitee 仓库使用：`modpack/latest.json`。
++
++启用后的格式：
++
++```json
++{
++  "schema": 1,
++  "product": "xingli_modpack",
++  "enabled": true,
++  "pack_id": "xingli-skyrim",
++  "name": "星黎整合包",
++  "version": "3.1.0",
++  "title": "3.1 内容更新",
++  "published_at": "2026-09-08T17:00:00+08:00",
++  "changelog": "新增内容……",
++  "download_page": "https://你的网盘网页地址"
++}
++```
++
++当远端 `version` 高于本机版本时：
++
++1. 主页显示橙色“有新版本”；
++2. 启动后自动提示一次；
++3. 用户点击“前往网盘”后，才会调用默认浏览器打开 `download_page`；
++4. 星黎助手不会自动下载、安装或覆盖整合包文件。
+diff -ruN xingli_v201_base/xingli_Little_assistant/auto_updater.py xingli_v202_work/xingli_Little_assistant/auto_updater.py
+--- xingli_v201_base/xingli_Little_assistant/auto_updater.py	2026-09-08 08:03:11.000000000 +0000
++++ xingli_v202_work/xingli_Little_assistant/auto_updater.py	2026-09-08 09:07:40.254122910 +0000
+@@ -42,7 +42,7 @@
+ PRODUCT_ID = "xingli_Little_assistant"
+ SOURCES_FILE = "update_sources.json"
+ DEFAULT_TIMEOUT_SECONDS = 8
+-USER_AGENT = "Xingli-MO2-Assistant-Updater/2.0.1"
++USER_AGENT = "Xingli-MO2-Assistant-Updater/2.0.2"
+ PLACEHOLDER_MARKERS = ("YOUR_", "<owner>", "<repo>", "example.com")
+ 
+ 
+diff -ruN xingli_v201_base/xingli_Little_assistant/consolidation_controller.py xingli_v202_work/xingli_Little_assistant/consolidation_controller.py
+--- xingli_v201_base/xingli_Little_assistant/consolidation_controller.py	2026-09-08 08:02:18.000000000 +0000
++++ xingli_v202_work/xingli_Little_assistant/consolidation_controller.py	2026-09-08 09:08:39.526979142 +0000
+@@ -26,6 +26,7 @@
+ from . import user_assistant
+ from . import auto_updater
+ from . import modpack_health
++from . import modpack_updater
+ from . import mod_compressor
+ from . import lod_pipeline
+ from . import mod_manager
+@@ -49,7 +50,7 @@
+     NAME = "星黎整合用户助手"  # 用户版名称
+     CONFIG_FILE_NAME = "version.ini" # ini 文件名
+     SETTINGS_FILE_NAME = "settings.ini" # 新增：设置文件名
+-    DEFAULT_VERSION = "2.0.1" # 默认版本号
++    DEFAULT_VERSION = "2.0.2" # 默认版本号
+ 
+     AUTO_RESOLUTION_MOD_NAME = "自动分辨率设置-Auto Resolution"
+ 
+@@ -69,10 +70,16 @@
+         self.mod_manager_button = None
+         self.local_version = self._read_local_version() # 在初始化时读取
+         self._xingli_update_status = {"state": "unknown", "latest": "", "source": "", "message": ""}
++        self._xingli_modpack_update_status = {"state": "unknown", "installed": "", "latest": "", "source": "", "message": ""}
++        self._modpack_update_manifest = None
++        self._modpack_update_thread = None
++        self._modpack_update_prompted_version = ""
+         self._mo2_managed_app_running = False
+         self._mo2_managed_app_name = ""
+         self.update_status_label = None
+         self.update_button = None
++        self.modpack_update_status_label = None
++        self.modpack_update_button = None
+         self.game_path = None # 新增：存储游戏路径的变量
+         self.game_path_label = None # 新增：用于显示游戏路径的标签
+         # --- DSD Generator 相关 ---
+@@ -360,6 +367,8 @@
+ 
+         # 用户版自动更新：按 settings.ini 的 AutoUpdate 配置静默检查；发现更新才提示。
+         QTimer.singleShot(3500, lambda: auto_updater.maybe_auto_check(self))
++        # 整合包内容更新独立检查：只提示并打开作者网盘，不修改本地整合内容。
++        QTimer.singleShot(4800, lambda: modpack_updater.maybe_auto_check(self))
+ 
+         QTimer.singleShot(2000, self.show_welcome_dialog)
+         return True
+@@ -572,8 +581,8 @@
+ 
+     def version(self) -> mobase.VersionInfo:
+         # 暂时返回一个固定的版本号进行调试
+-        print("version() 返回版本 2.0.1-user")
+-        return mobase.VersionInfo(2, 0, 1)
++        print("version() 返回版本 2.0.2-user")
++        return mobase.VersionInfo(2, 0, 2)
+ 
+     def settings(self) -> list:
+         return []
+@@ -732,6 +741,67 @@
+             except Exception:
+                 pass
+ 
++    def _set_modpack_update_home_status(self, status) -> None:
++        """Update the compact modpack-content update indicator."""
++        if isinstance(status, dict):
++            self._xingli_modpack_update_status = dict(status)
++        data = getattr(self, "_xingli_modpack_update_status", {}) or {}
++        state = str(data.get("state", "unknown"))
++        installed = str(data.get("installed", "") or "")
++        latest = str(data.get("latest", "") or "")
++        if state == "update_available":
++            text = "🟠 有新版本 {}".format(latest)
++            tip = "整合包内容有新版本，确认后可打开作者网盘页面。"
++            button_text = "前往更新"
++        elif state == "up_to_date":
++            text = "🟢 已是最新版本 {}".format(installed or latest)
++            tip = "当前整合包内容版本已是最新。"
++            button_text = "检查"
++        elif state == "checking":
++            text = "🔵 正在检查…"
++            tip = "正在检查整合包内容版本。"
++            button_text = "检查"
++        elif state == "disabled":
++            text = "⚪ 更新提示尚未启用"
++            tip = str(data.get("message", "作者尚未启用整合包更新提示。"))
++            button_text = "检查"
++        elif state == "unconfigured":
++            text = "⚪ 未记录整合包版本"
++            tip = str(data.get("message", "作者尚未配置本机整合包版本。"))
++            button_text = "检查"
++        elif state == "error":
++            text = "⚪ 暂时无法检查"
++            tip = str(data.get("message", "请稍后重试。"))
++            button_text = "重试"
++        else:
++            text = "⚪ 尚未检查"
++            tip = "启动后会自动检查整合包内容版本。"
++            button_text = "检查"
++
