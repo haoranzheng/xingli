@@ -40,16 +40,16 @@ jobs:
           cat release_build/v2.0.2/patch.part.* > /tmp/xingli-v202.patch
           patch -p1 -d .release_work < /tmp/xingli-v202.patch
 
-          echo '--- changed file hashes ---'
-          sha256sum \
-            .release_work/xingli_Little_assistant/CHANGELOG_v2.0.2.md \
-            .release_work/xingli_Little_assistant/MODPACK_UPDATE_GUIDE_CN.md \
-            .release_work/xingli_Little_assistant/auto_updater.py \
-            .release_work/xingli_Little_assistant/consolidation_controller.py \
-            .release_work/xingli_Little_assistant/modpack_release.json \
-            .release_work/xingli_Little_assistant/modpack_update_sources.json \
-            .release_work/xingli_Little_assistant/modpack_updater.py \
-            .release_work/xingli_Little_assistant/version.ini
+          # The v2.0.1 archive retained CRLF in this large controller while the
+          # verified v2.0.2 source was generated with LF. Normalize only this
+          # text file before the immutable source-tree digest gate.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.release_work/xingli_Little_assistant/consolidation_controller.py')
+          text = p.read_text(encoding='utf-8').replace('\r\n', '\n').replace('\r', '\n')
+          with open(str(p), 'w', encoding='utf-8', newline='\n') as handle:
+              handle.write(text)
+          PY
 
           python3 - <<'PY'
           from pathlib import Path
