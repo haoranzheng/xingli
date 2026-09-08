@@ -40,6 +40,17 @@ jobs:
           cat release_build/v2.0.2/patch.part.* > /tmp/xingli-v202.patch
           patch -p1 -d .release_work < /tmp/xingli-v202.patch
 
+          echo '--- changed file hashes ---'
+          sha256sum \
+            .release_work/xingli_Little_assistant/CHANGELOG_v2.0.2.md \
+            .release_work/xingli_Little_assistant/MODPACK_UPDATE_GUIDE_CN.md \
+            .release_work/xingli_Little_assistant/auto_updater.py \
+            .release_work/xingli_Little_assistant/consolidation_controller.py \
+            .release_work/xingli_Little_assistant/modpack_release.json \
+            .release_work/xingli_Little_assistant/modpack_update_sources.json \
+            .release_work/xingli_Little_assistant/modpack_updater.py \
+            .release_work/xingli_Little_assistant/version.ini
+
           python3 - <<'PY'
           from pathlib import Path
           import hashlib, json, zipfile
