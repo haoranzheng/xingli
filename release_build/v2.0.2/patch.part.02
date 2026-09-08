@@ -1,0 +1,182 @@
++    data = _read_json(os.path.join(_plugin_path(controller), SOURCES_FILE)) or {}
++    urls = []
++    for raw in data.get("manifest_urls", []) if isinstance(data.get("manifest_urls"), list) else []:
++        url = str(raw or "").strip()
++        if url.startswith("https://") or url.startswith("http://"):
++            urls.append(url)
++    try:
++        timeout = int(data.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS) or DEFAULT_TIMEOUT_SECONDS)
++    except Exception:
++        timeout = DEFAULT_TIMEOUT_SECONDS
++    return {"manifest_urls": urls, "timeout_seconds": max(3, min(30, timeout))}
++
++
++def _source_name(url: str) -> str:
++    value = str(url or "").lower()
++    if "gitee.com" in value:
++        return "Gitee 国内主源"
++    if "github.com" in value or "githubusercontent.com" in value:
++        return "GitHub 备用源"
++    return "整合包更新源"
++
++
++def validate_manifest(data: Dict[str, object]) -> Dict[str, object]:
++    if not isinstance(data, dict):
++        raise RuntimeError("整合包更新清单格式无效。")
++    if int(data.get("schema", 0) or 0) < 1:
++        raise RuntimeError("整合包更新清单版本无效。")
++    if str(data.get("product", "")) != PRODUCT_ID:
++        raise RuntimeError("该更新清单不属于星黎整合包。")
++
++    result = dict(data)
++    enabled = bool(result.get("enabled", True))
++    result["enabled"] = enabled
++    if not enabled:
++        return result
++
++    pack_id = str(result.get("pack_id", "") or "").strip()
++    version = str(result.get("version", "") or "").strip()
++    download_page = str(result.get("download_page", "") or "").strip()
++    if not pack_id:
++        raise RuntimeError("整合包更新清单缺少 pack_id。")
++    if not version or normalize_version(version) == (0,):
++        raise RuntimeError("整合包更新清单缺少有效版本号。")
++    if not (download_page.startswith("https://") or download_page.startswith("http://")):
++        raise RuntimeError("整合包更新清单缺少有效网盘地址。")
++    result["pack_id"] = pack_id
++    result["version"] = version
++    result["download_page"] = download_page
++    return result
++
++
++def fetch_manifest(urls: List[str], timeout: int) -> Tuple[Dict[str, object], str]:
++    if not urls:
++        raise RuntimeError("作者尚未配置整合包更新源。")
++    errors = []
++    for url in urls:
++        try:
++            request = urllib.request.Request(
++                url,
++                headers={"User-Agent": USER_AGENT, "Accept": "application/json,*/*"},
++            )
++            with urllib.request.urlopen(request, timeout=int(timeout)) as response:
++                raw = response.read().decode("utf-8-sig")
++            return validate_manifest(json.loads(raw)), url
++        except Exception as exc:
++            errors.append("{}: {}".format(_source_name(url), exc))
++            logger.warning("整合包更新源失败 %s: %s", url, exc)
++    raise RuntimeError("所有整合包更新源均不可用。\n" + "\n".join(errors[-2:]))
++
++
++class ModpackCheckThread(QThread):
++    checked = pyqtSignal(dict, str)
++    failed = pyqtSignal(str)
++
++    def __init__(self, urls: List[str], timeout: int):
++        super().__init__()
++        self.urls = list(urls)
++        self.timeout = int(timeout)
++
++    def run(self):
++        try:
++            manifest, source = fetch_manifest(self.urls, self.timeout)
++            self.checked.emit(manifest, source)
++        except Exception as exc:
++            self.failed.emit(str(exc))
++
++
++def _publish_home_status(controller, state: str, installed: str = "", latest: str = "",
++                         source: str = "", message: str = "") -> None:
++    payload = {
++        "state": str(state or "unknown"),
++        "installed": str(installed or ""),
++        "latest": str(latest or ""),
++        "source": str(source or ""),
++        "message": str(message or ""),
++        "checked_at": datetime.now().isoformat(timespec="seconds"),
++    }
++    controller._xingli_modpack_update_status = payload
++    callback = getattr(controller, "_set_modpack_update_home_status", None)
++    if callable(callback):
++        try:
++            callback(payload)
++        except Exception:
++            logger.exception("更新整合包主页状态失败")
++
++
++def _open_download_page(parent, manifest: Dict[str, object]) -> bool:
++    url = str(manifest.get("download_page", "") or "").strip()
++    if not (url.startswith("https://") or url.startswith("http://")):
++        QtWidgets.QMessageBox.warning(parent, "整合包更新", "作者尚未配置有效的网盘地址。")
++        return False
++    try:
++        ok = webbrowser.open_new_tab(url)
++        if ok is False:
++            raise RuntimeError("系统没有接受打开网页请求")
++        return True
++    except Exception as exc:
++        logger.exception("打开整合包网盘失败")
++        QtWidgets.QMessageBox.warning(parent, "无法打开网页", "无法打开网盘页面：\n{}".format(exc))
++        return False
++
++
++def prompt_update(controller, manifest: Optional[Dict[str, object]] = None, automatic: bool = False) -> bool:
++    manifest = manifest or getattr(controller, "_modpack_update_manifest", None)
++    if not isinstance(manifest, dict):
++        return False
++    local = load_local_release(controller)
++    current = str(local.get("installed_version", "") or "")
++    latest = str(manifest.get("version", "") or "")
++    pack_name = str(manifest.get("name", local.get("name", "星黎整合包")) or "星黎整合包")
++    title = str(manifest.get("title", "") or "").strip()
++    changelog = str(manifest.get("changelog", "") or "").strip()
++
++    box = QtWidgets.QMessageBox(getattr(controller, "window", None))
++    box.setWindowTitle("整合包有新版本")
++    box.setIcon(QtWidgets.QMessageBox.Information)
++    headline = "{} 已发布新版本 {}".format(pack_name, latest)
++    if title:
++        headline += "\n{}".format(title)
++    box.setText(headline)
++    detail = "当前版本：{}\n最新版本：{}".format(current or "未记录", latest)
++    if changelog:
++        detail += "\n\n更新内容：\n{}".format(changelog)
++    detail += "\n\n是否打开作者提供的网盘页面？"
++    box.setInformativeText(detail)
++    open_btn = box.addButton("前往网盘", QtWidgets.QMessageBox.AcceptRole)
++    box.addButton("稍后", QtWidgets.QMessageBox.RejectRole)
++    if hasattr(box, "exec"):
++        box.exec()
++    else:
++        box.exec_()
++    if box.clickedButton() is open_btn:
++        return _open_download_page(getattr(controller, "window", None), manifest)
++    return False
++
++
++def _start_check(controller, prompt_when_new: bool) -> None:
++    local = load_local_release(controller)
++    installed = str(local.get("installed_version", "") or "").strip()
++    if not installed:
++        _publish_home_status(
++            controller,
++            "unconfigured",
++            message="尚未记录当前整合包版本。作者可在 modpack_release.json 中设置，或先建立整合包基准。",
++        )
++        return
++
++    sources = load_sources(controller)
++    urls = list(sources.get("manifest_urls", []))
++    if not urls:
++        _publish_home_status(controller, "unconfigured", installed=installed, message="作者尚未配置整合包更新源。")
++        return
++
++    _publish_home_status(controller, "checking", installed=installed)
++    thread = ModpackCheckThread(urls, int(sources.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)))
++    controller._modpack_update_thread = thread
++
++    def on_checked(manifest, source):
++        controller._modpack_update_thread = None
++        source_name = _source_name(source)
++        if not bool(manifest.get("enabled", True)):
++            _publish_home_status(controller, "disabled", installed=installed, source=source_name,
