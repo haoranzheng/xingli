@@ -1,0 +1,325 @@
+spath(str(value))
++    except Exception:
++        pass
++    return ""
++
++
++def _profile_name(organizer, profile_path: str) -> str:
++    try:
++        value = organizer.profileName()
++        if value:
++            return str(value)
++    except Exception:
++        pass
++    return os.path.basename(profile_path.rstrip("\\/")) if profile_path else "CurrentProfile"
++
++
++def _game_name(organizer) -> str:
++    try:
++        game = organizer.managedGame()
++        short = game.gameShortName()
++        if short:
++            return str(short)
++    except Exception:
++        pass
++    return ""
++
++
++def _mo2_version(organizer) -> str:
++    try:
++        return str(organizer.version())
++    except Exception:
++        return ""
++
++
++def _read_text(path: str) -> str:
++    if not path or not os.path.isfile(path):
++        return ""
++    for encoding in ("utf-8-sig", "utf-8", "mbcs"):
++        try:
++            with open(path, "r", encoding=encoding, errors="strict") as handle:
++                return handle.read()
++        except Exception:
++            continue
++    try:
++        with open(path, "r", encoding="utf-8", errors="replace") as handle:
++            return handle.read()
++    except Exception:
++        return ""
++
++
++def _normalized_lines(text: str) -> List[str]:
++    result = []
++    for raw in str(text or "").splitlines():
++        line = raw.strip().lstrip("\ufeff")
++        if line:
++            result.append(line)
++    return result
++
++
++def _sha256_text(text: str) -> str:
++    return hashlib.sha256(str(text or "").replace("\r\n", "\n").encode("utf-8")).hexdigest()
++
++
++def _parse_modlist(text: str) -> List[Dict[str, object]]:
++    mods = []
++    for line in _normalized_lines(text):
++        if line.startswith("#"):
++            continue
++        enabled = None
++        name = line
++        if line[0:1] == "+":
++            enabled = True
++            name = line[1:].strip()
++        elif line[0:1] == "-":
++            enabled = False
++            name = line[1:].strip()
++        elif line[0:1] == "*":
++            enabled = True
++            name = line[1:].strip()
++        if not name:
++            continue
++        mods.append({"name": name, "enabled": enabled})
++    return mods
++
++
++def _capture_file(profile_path: str, filename: str) -> Dict[str, object]:
++    path = os.path.join(profile_path, filename)
++    exists = os.path.isfile(path)
++    text = _read_text(path) if exists else ""
++    return {
++        "name": filename,
++        "exists": bool(exists),
++        "sha256": _sha256_text(text) if exists else "",
++        "lines": _normalized_lines(text) if exists else [],
++    }
++
++
++def capture_environment(organizer, assistant_version: str) -> Dict[str, object]:
++    profile_path = _profile_path(organizer)
++    if not profile_path or not os.path.isdir(profile_path):
++        raise RuntimeError("无法读取当前 MO2 配置目录。")
++    modlist_text = _read_text(os.path.join(profile_path, "modlist.txt"))
++    files = {}
++    for filename in ("plugins.txt", "loadorder.txt", "Skyrim.ini", "SkyrimPrefs.ini", "SkyrimCustom.ini"):
++        files[filename] = _capture_file(profile_path, filename)
++    return {
++        "captured_at": datetime.now().isoformat(timespec="seconds"),
++        "assistant_version": str(assistant_version or ""),
++        "mo2_version": _mo2_version(organizer),
++        "game": _game_name(organizer),
++        "profile": _profile_name(organizer, profile_path),
++        "mods": _parse_modlist(modlist_text),
++        "modlist_sha256": _sha256_text(modlist_text),
++        "profile_files": files,
++    }
++
++
++def _mod_map(mods: List[Dict[str, object]]) -> Dict[str, Optional[bool]]:
++    return {str(item.get("name", "")): item.get("enabled") for item in mods if str(item.get("name", ""))}
++
++
++def _mod_order(mods: List[Dict[str, object]]) -> List[str]:
++    return [str(item.get("name", "")) for item in mods if str(item.get("name", ""))]
++
++
++def compare_environment(baseline: Dict[str, object], current: Dict[str, object]) -> Dict[str, object]:
++    base_mods = list(baseline.get("environment", {}).get("mods", [])) if isinstance(baseline.get("environment"), dict) else []
++    cur_mods = list(current.get("mods", []))
++    base_map = _mod_map(base_mods)
++    cur_map = _mod_map(cur_mods)
++
++    base_names = set(base_map.keys())
++    cur_names = set(cur_map.keys())
++    missing = sorted(base_names - cur_names, key=str.lower)
++    added = sorted(cur_names - base_names, key=str.lower)
++    state_changes = []
++    for name in sorted(base_names & cur_names, key=str.lower):
++        if base_map.get(name) != cur_map.get(name):
++            state_changes.append({"name": name, "expected": base_map.get(name), "current": cur_map.get(name)})
++
++    common_base = [x for x in _mod_order(base_mods) if x in cur_names]
++    common_cur = [x for x in _mod_order(cur_mods) if x in base_names]
++    order_changed = common_base != common_cur
++
++    base_files = baseline.get("environment", {}).get("profile_files", {}) if isinstance(baseline.get("environment"), dict) else {}
++    cur_files = current.get("profile_files", {})
++    file_changes = []
++    for filename in ("plugins.txt", "loadorder.txt", "Skyrim.ini", "SkyrimPrefs.ini", "SkyrimCustom.ini"):
++        before = base_files.get(filename, {}) if isinstance(base_files, dict) else {}
++        after = cur_files.get(filename, {}) if isinstance(cur_files, dict) else {}
++        if bool(before.get("exists")) != bool(after.get("exists")) or str(before.get("sha256", "")) != str(after.get("sha256", "")):
++            file_changes.append(filename)
++
++    issue_count = len(missing) + len(added) + len(state_changes) + (1 if order_changed else 0) + len(file_changes)
++    status = "healthy" if issue_count == 0 else "changed"
++    return {
++        "schema": 1,
++        "checked_at": datetime.now().isoformat(timespec="seconds"),
++        "status": status,
++        "issue_count": issue_count,
++        "missing_mods": missing,
++        "added_mods": added,
++        "state_changes": state_changes,
++        "mod_order_changed": bool(order_changed),
++        "profile_file_changes": file_changes,
++        "baseline_profile": str(baseline.get("environment", {}).get("profile", "")) if isinstance(baseline.get("environment"), dict) else "",
++        "current_profile": str(current.get("profile", "")),
++    }
++
++
++class ModpackHealthStore:
++    def __init__(self, organizer, plugin_dir: str, assistant_version: str):
++        self.organizer = organizer
++        self.plugin_dir = plugin_dir
++        self.assistant_version = assistant_version
++        self.root = _plugin_data_root(organizer, plugin_dir)
++        self.manifest_path = os.path.join(self.root, MANIFEST_FILE)
++        self.report_path = os.path.join(self.root, REPORT_FILE)
++
++    def load_manifest(self) -> Optional[Dict[str, object]]:
++        if not os.path.isfile(self.manifest_path):
++            return None
++        try:
++            with open(self.manifest_path, "r", encoding="utf-8-sig") as handle:
++                data = json.load(handle)
++            return data if isinstance(data, dict) else None
++        except Exception:
++            logger.exception("读取整合包基准失败")
++            return None
++
++    def save_manifest(self, pack_name: str, pack_version: str) -> Dict[str, object]:
++        environment = capture_environment(self.organizer, self.assistant_version)
++        data = {
++            "schema": SCHEMA_VERSION,
++            "product": "Xingli Modpack Manifest",
++            "pack_name": str(pack_name or "星黎整合包").strip(),
++            "pack_version": str(pack_version or "1.0.0").strip(),
++            "created_at": datetime.now().isoformat(timespec="seconds"),
++            "environment": environment,
++        }
++        temp = self.manifest_path + ".tmp"
++        with open(temp, "w", encoding="utf-8") as handle:
++            json.dump(data, handle, ensure_ascii=False, indent=2)
++        os.replace(temp, self.manifest_path)
++        return data
++
++    def check(self) -> Tuple[Dict[str, object], Dict[str, object]]:
++        baseline = self.load_manifest()
++        if not baseline:
++            raise RuntimeError("尚未建立整合包基准。")
++        current = capture_environment(self.organizer, self.assistant_version)
++        report = compare_environment(baseline, current)
++        with open(self.report_path, "w", encoding="utf-8") as handle:
++            json.dump(report, handle, ensure_ascii=False, indent=2)
++        return baseline, report
++
++
++class BaselineMetaDialog(QtWidgets.QDialog):
++    def __init__(self, pack_name: str = "星黎整合包", pack_version: str = "1.0.0", parent=None):
++        super().__init__(parent)
++        self.setWindowTitle("建立整合包基准")
++        layout = QtWidgets.QVBoxLayout(self)
++        intro = QtWidgets.QLabel("请确认当前 MOD 启停、顺序和插件顺序已经是你希望保留的标准状态。")
++        intro.setWordWrap(True)
++        layout.addWidget(intro)
++        form = QtWidgets.QFormLayout()
++        self.name_edit = QtWidgets.QLineEdit(pack_name)
++        self.version_edit = QtWidgets.QLineEdit(pack_version)
++        form.addRow("整合包名称：", self.name_edit)
++        form.addRow("整合包版本：", self.version_edit)
++        layout.addLayout(form)
++        box = QtWidgets.QDialogButtonBox(
++            QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel
++            if hasattr(QtWidgets.QDialogButtonBox, "StandardButton")
++            else QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
++        )
++        box.accepted.connect(self.accept)
++        box.rejected.connect(self.reject)
++        layout.addWidget(box)
++
++    def values(self) -> Tuple[str, str]:
++        return self.name_edit.text().strip(), self.version_edit.text().strip()
++
++
++class ModpackHealthDialog(QtWidgets.QDialog):
++    def __init__(self, parent, organizer, plugin_dir: str, assistant_version: str):
++        super().__init__(parent)
++        self.store = ModpackHealthStore(organizer, plugin_dir, assistant_version)
++        self.setWindowTitle("整合包检查")
++        self.setMinimumSize(660, 500)
++        self.resize(720, 560)
++        self._build_ui()
++        self._refresh_baseline_state()
++
++    def _build_ui(self):
++        layout = QtWidgets.QVBoxLayout(self)
++        layout.setContentsMargins(18, 16, 18, 16)
++        layout.setSpacing(12)
++
++        title = QtWidgets.QLabel("整合包检查")
++        font = QtGui.QFont()
++        font.setPointSize(15)
++        font.setBold(True)
++        title.setFont(font)
++        layout.addWidget(title)
++
++        desc = QtWidgets.QLabel("记录一份正常状态作为基准，以后可以快速发现 MOD 启停、顺序或配置是否发生变化。")
++        desc.setWordWrap(True)
++        desc.setStyleSheet("color: #666;")
++        layout.addWidget(desc)
++
++        self.status_card = QtWidgets.QFrame()
++        self.status_card.setObjectName("healthStatusCard")
++        card_layout = QtWidgets.QVBoxLayout(self.status_card)
++        card_layout.setContentsMargins(14, 12, 14, 12)
++        self.status_title = QtWidgets.QLabel("尚未建立基准")
++        status_font = QtGui.QFont()
++        status_font.setPointSize(12)
++        status_font.setBold(True)
++        self.status_title.setFont(status_font)
++        self.status_detail = QtWidgets.QLabel("建立基准后即可检查当前整合包状态。")
++        self.status_detail.setWordWrap(True)
++        card_layout.addWidget(self.status_title)
++        card_layout.addWidget(self.status_detail)
++        layout.addWidget(self.status_card)
++
++        buttons = QtWidgets.QHBoxLayout()
++        self.create_btn = QtWidgets.QPushButton("建立当前基准")
++        self.check_btn = QtWidgets.QPushButton("检查当前状态")
++        self.update_btn = QtWidgets.QPushButton("更新基准")
++        self.create_btn.clicked.connect(self.create_baseline)
++        self.check_btn.clicked.connect(self.check_health)
++        self.update_btn.clicked.connect(self.update_baseline)
++        buttons.addWidget(self.create_btn)
++        buttons.addWidget(self.check_btn)
++        buttons.addWidget(self.update_btn)
++        layout.addLayout(buttons)
++
++        self.details = QtWidgets.QPlainTextEdit()
++        self.details.setReadOnly(True)
++        layout.addWidget(self.details, 1)
++
++        hint = QtWidgets.QLabel("当前版本只负责检查，不会自动修改或修复你的 MOD。")
++        hint.setStyleSheet("color: #777;")
++        layout.addWidget(hint)
++
++        foot = QtWidgets.QHBoxLayout()
++        open_btn = QtWidgets.QPushButton("打开基准目录")
++        open_btn.clicked.connect(self.open_folder)
++        close_btn = QtWidgets.QPushButton("关闭")
++        close_btn.clicked.connect(self.close)
++        foot.addWidget(open_btn)
++        foot.addStretch(1)
++        foot.addWidget(close_btn)
++        layout.addLayout(foot)
++
++    def _set_card(self, title: str, detail: str, kind: str):
++        palette = {
++            "ok": ("#edf7ed", "#b7ddb8", "#1f6b2a"),
++            "warn": ("#fff6e5", "#f1cf8b", "#8a5700"),
++            "neutral": ("#f6f8fa", "#d9dee5", "#444"),
++            "error": ("#fff0f0", "#e6b3b3", "#9b2c2c"),
++        }
++        bg, border, fg = palette.get(kind, palette["neutral"])
++        self.status_card.setStyl

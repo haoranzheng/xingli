@@ -1,0 +1,319 @@
+8,50 +810,39 @@
+ 
+ 
+ def maybe_auto_check(controller, parent=None) -> None:
+-    """Silent startup check. Failures are logged only."""
++    """Check once after MO2 starts. Never interrupts the user; home page shows the result."""
+     try:
+         settings = get_update_settings(controller)
+         auto = (settings.get("autocheckonstartup") or "true").lower() in ("1", "yes", "true", "on")
+         if not auto:
++            _publish_home_status(controller, "disabled", message="自动检查已关闭")
+             return
+-        try:
+-            interval = int(settings.get("checkintervalhours") or DEFAULT_CHECK_INTERVAL_HOURS)
+-        except Exception:
+-            interval = DEFAULT_CHECK_INTERVAL_HOURS
+-        last = settings.get("lastcheck") or ""
+-        if last:
+-            try:
+-                if datetime.now() - datetime.fromisoformat(last) < timedelta(hours=max(1, interval)):
+-                    return
+-            except Exception:
+-                pass
+         sources = load_update_sources(controller)
+         urls = list(sources.get("manifest_urls", []))
+         if not urls:
+             logger.info("自动更新未配置远程源，跳过启动检查")
++            _publish_home_status(controller, "error", message="更新源未配置")
+             return
++        _publish_home_status(controller, "checking")
+         thread = ManifestCheckThread(urls, int(sources.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)))
+ 
+         def on_checked(manifest, source):
+             try:
+                 local = str(getattr(controller, "local_version", "") or "0.0.0")
+                 latest = str(manifest.get("version", "0.0.0"))
+-                set_update_settings(controller, True, interval, last_check=datetime.now().isoformat(timespec="seconds"))
+-                skipped = settings.get("skippedversion") or ""
+-                if compare_versions(latest, local) > 0 and compare_versions(latest, skipped) != 0:
+-                    if _question(parent, "发现星黎助手更新", "发现新版本：{}\n\n是否查看更新？".format(latest)):
+-                        dlg = AutoUpdateDialog(controller, parent)
+-                        dlg._on_manifest_checked(manifest, source)
+-                        _exec_dialog(dlg)
++                set_update_settings(controller, True, last_check=datetime.now().isoformat(timespec="seconds"))
++                state = "update_available" if compare_versions(latest, local) > 0 else "up_to_date"
++                _publish_home_status(controller, state, latest=latest, source=source)
+             except Exception:
+                 logger.exception("自动更新结果处理失败")
+ 
+         def on_failed(error):
+             logger.warning("自动更新检查失败: %s", error)
+             try:
+-                set_update_settings(controller, True, interval, last_check=datetime.now().isoformat(timespec="seconds"))
++                set_update_settings(controller, True, last_check=datetime.now().isoformat(timespec="seconds"))
+             except Exception:
+                 pass
++            _publish_home_status(controller, "error", message=str(error))
+ 
+         controller._xingli_auto_update_thread = thread
+         thread.checked.connect(on_checked)
+@@ -789,3 +850,5 @@
+         thread.start()
+     except Exception:
+         logger.exception("自动更新初始化失败")
++        _publish_home_status(controller, "error", message="自动更新初始化失败")
++
+ diff -ruN a/xingli_Little_assistant/consolidation_controller.py b/xingli_Little_assistant/consolidation_controller.py
+--- a/xingli_Little_assistant/consolidation_controller.py	2026-09-08 04:15:48.000000000 +0000
++++ b/xingli_Little_assistant/consolidation_controller.py	2026-09-08 07:14:58.000000000 +0000
+@@ -25,6 +25,7 @@
+ from . import utils
+ from . import user_assistant
+ from . import auto_updater
++from . import modpack_health
+ from . import mod_compressor
+ from . import lod_pipeline
+ from . import mod_manager
+@@ -48,7 +49,7 @@
+     NAME = "星黎整合用户助手"  # 用户版名称
+     CONFIG_FILE_NAME = "version.ini" # ini 文件名
+     SETTINGS_FILE_NAME = "settings.ini" # 新增：设置文件名
+-    DEFAULT_VERSION = "1.9.2" # 默认版本号
++    DEFAULT_VERSION = "2.0.0" # 默认版本号
+ 
+     AUTO_RESOLUTION_MOD_NAME = "自动分辨率设置-Auto Resolution"
+ 
+@@ -67,6 +68,9 @@
+         self.lod_pipeline_button = None
+         self.mod_manager_button = None
+         self.local_version = self._read_local_version() # 在初始化时读取
++        self._xingli_update_status = {"state": "unknown", "latest": "", "source": "", "message": ""}
++        self.update_status_label = None
++        self.update_button = None
+         self.game_path = None # 新增：存储游戏路径的变量
+         self.game_path_label = None # 新增：用于显示游戏路径的标签
+         # --- DSD Generator 相关 ---
+@@ -537,12 +541,12 @@
+         return "YourName"
+ 
+     def description(self) -> str:
+-        return u"星黎整合用户助手：新手/高级双模式、启动自检、模组管理中心、ENB 管理、LOD自动化、自动更新与排错；管理/压缩/LOD仅高级玩家可用"
++        return u"星黎整合用户助手：新手/高级双模式、启动自检、整合包检查、模组管理中心、ENB 管理、LOD自动化、自动更新与排错；管理/压缩/LOD仅高级玩家可用"
+ 
+     def version(self) -> mobase.VersionInfo:
+         # 暂时返回一个固定的版本号进行调试
+-        print("version() 返回版本 1.9.2-user")
+-        return mobase.VersionInfo(1, 9, 2)
++        print("version() 返回版本 2.0.0-user")
++        return mobase.VersionInfo(2, 0, 0)
+ 
+     def settings(self) -> list:
+         return []
+@@ -551,7 +555,7 @@
+         return "星黎MO2小助手"  
+ 
+     def tooltip(self) -> str:
+-        return "新手/高级双模式：启动自检、模组管理中心、ENB 管理、LOD自动化、自动更新、教程与排错；管理/压缩/LOD仅高级玩家可用"  
++        return "新手/高级双模式：启动自检、整合包检查、模组管理中心、ENB 管理、LOD自动化、自动更新、教程与排错；管理/压缩/LOD仅高级玩家可用"  
+ 
+     def icon(self) -> QtGui.QIcon:
+         icon_path = os.path.join(self.plugin_path, "icon.png") # 假设图标文件名为 icon.png
+@@ -657,6 +661,67 @@
+         welcome_dialog.exec()
+ 
+ 
++    def _set_update_home_status(self, status) -> None:
++        """Update the compact update indicator on the home page."""
++        if isinstance(status, dict):
++            self._xingli_update_status = dict(status)
++        data = getattr(self, "_xingli_update_status", {}) or {}
++        state = str(data.get("state", "unknown"))
++        latest = str(data.get("latest", ""))
++        if state == "update_available":
++            text = "🟠 有新版本 {}".format(latest or "")
++            tip = "发现星黎助手新版本，点击查看并更新。"
++            button_text = "查看更新"
++        elif state == "up_to_date":
++            text = "🟢 已是最新版本 {}".format(self.local_version)
++            tip = "启动时检查已完成，当前版本是最新版本。"
++            button_text = "检查更新"
++        elif state == "checking":
++            text = "🔵 正在检查更新…"
++            tip = "正在连接国内更新源。"
++            button_text = "更新"
++        elif state == "error":
++            text = "⚪ 暂时无法检查更新"
++            tip = str(data.get("message", "请稍后手动检查。"))
++            button_text = "重试更新"
++        elif state == "disabled":
++            text = "⚪ 自动检查已关闭"
++            tip = "可以在更新页面重新开启。"
++            button_text = "更新设置"
++        else:
++            text = "⚪ 更新状态尚未检查"
++            tip = "打开 MO2 后会自动检查一次，也可以手动检查。"
++            button_text = "检查更新"
++        if self.update_status_label is not None:
++            try:
++                self.update_status_label.setText(text)
++                self.update_status_label.setToolTip(tip)
++            except Exception:
++                pass
++        if self.update_button is not None:
++            try:
++                self.update_button.setText(button_text)
++                self.update_button.setToolTip(tip)
++            except Exception:
++                pass
++
++    def show_modpack_health(self):
++        """Open the read-only modpack baseline / health check center."""
++        try:
++            return modpack_health.show_modpack_health(
++                self.window if hasattr(self, "window") else None,
++                self.organizer,
++                self.plugin_path,
++                self.local_version,
++            )
++        except Exception as e:
++            logger.exception("打开整合包检查失败")
++            QtWidgets.QMessageBox.critical(
++                self.window if hasattr(self, "window") else None,
++                "打开失败",
++                "无法打开整合包检查：\n{}".format(e),
++            )
++
+     def display(self) -> None:
+ 
+         self.window = QtWidgets.QDialog()
+@@ -731,6 +796,22 @@
+         )
+         main_layout.addWidget(launcher_hint)
+ 
++        # 首页更新状态：启动时静默检查一次，结果直接显示在这里。
++        update_row = QtWidgets.QHBoxLayout()
++        self.update_status_label = QtWidgets.QLabel()
++        self.update_status_label.setWordWrap(True)
++        self.update_status_label.setStyleSheet(
++            "QLabel { background-color: #f6f8fa; border: 1px solid #d9dee5; "
++            "border-radius: 6px; padding: 7px 10px; }"
++        )
++        update_row.addWidget(self.update_status_label, 1)
++        quick_update_btn = QtWidgets.QPushButton("检查更新")
++        quick_update_btn.clicked.connect(self.show_auto_updater)
++        quick_update_btn.setMinimumWidth(90)
++        update_row.addWidget(quick_update_btn)
++        main_layout.addLayout(update_row)
++        self._set_update_home_status(getattr(self, "_xingli_update_status", {}))
++
+         # 玩家模式切换：新手默认隐藏高风险/高复杂度工具，高级模式完整显示。
+         mode_row = QtWidgets.QHBoxLayout()
+         mode_label = QtWidgets.QLabel("功能模式:")
+@@ -741,7 +822,7 @@
+         current_mode_index = self.mode_combo.findData(self.experience_mode)
+         if current_mode_index >= 0:
+             self.mode_combo.setCurrentIndex(current_mode_index)
+-        self.mode_combo.setToolTip("新手模式仅保留启动、自检、教程和更新；高级模式显示压缩、LOD生成等维护工具。")
++        self.mode_combo.setToolTip("新手模式保留启动、自检、整合包检查、教程和更新；高级模式显示压缩、LOD生成等维护工具。")
+         self.mode_combo.currentIndexChanged.connect(self._on_experience_mode_changed)
+         mode_row.addStretch()
+         mode_row.addWidget(mode_label)
+@@ -798,58 +879,66 @@
+         tutorial_button.clicked.connect(self.open_tutorial)
+         button_layout.addWidget(tutorial_button, 1, 0)
+         
+-        # 自动更新按钮
+-        update_button = QtWidgets.QPushButton("自动更新")
+-        update_button.setStyleSheet(button_style)
+-        update_button.setIcon(QtGui.QIcon.fromTheme("system-software-update"))
+-        update_button.setToolTip("检查是否有新版，并下载更新文件")
+-        update_button.clicked.connect(self.show_auto_updater)
+-        button_layout.addWidget(update_button, 1, 1)
++        # 更新入口
++        self.update_button = QtWidgets.QPushButton("检查更新")
++        self.update_button.setStyleSheet(button_style)
++        self.update_button.setIcon(QtGui.QIcon.fromTheme("system-software-update"))
++        self.update_button.clicked.connect(self.show_auto_updater)
++        button_layout.addWidget(self.update_button, 1, 1)
++        self._set_update_home_status(getattr(self, "_xingli_update_status", {}))
++
++
++        # 整合包健康检查：新手/高级模式均可使用，只读，不修改 MOD。
++        health_button = QtWidgets.QPushButton("🩺 整合包检查")
++        health_button.setStyleSheet(button_style.replace("#4a86e8", "#4f81bd").replace("#3a76d8", "#3f71ad").replace("#2a66c8", "#2f619d"))
++        health_button.setToolTip("建立正常状态基准，检查 MOD 启停、顺序和配置是否发生变化。")
++        health_button.clicked.connect(self.show_modpack_health)
++        button_layout.addWidget(health_button, 2, 0, 1, 2)
+ 
+         # --- 添加 DSD 生成器按钮 ---
+         dsd_button = QtWidgets.QPushButton("⚙️ 生成 DSD 配置")
+         dsd_button.setStyleSheet(button_style.replace("#4a86e8", "#5bc0de").replace("#3a76d8", "#46b8da").replace("#2a66c8", "#31b0d5")) # 浅蓝色样式
+         dsd_button.setToolTip("扫描翻译插件并生成 DSD 配置。")
+         dsd_button.clicked.connect(self.show_dsd_config_dialog) 
+-        button_layout.addWidget(dsd_button, 2, 0) 
++        button_layout.addWidget(dsd_button, 3, 0) 
+         
+ 
+         # --- 添加崩溃日志查看器按钮 ---
+         crash_log_button = QtWidgets.QPushButton("💥 崩溃日志查看器")
+         crash_log_button.setStyleSheet(button_style.replace("#eb4141", "#eb4141").replace("#f50e0e", "#f50e0e").replace("#f5203d", "#f5203d"))
+         crash_log_button.clicked.connect(self.show_crash_log_viewer)
+-        button_layout.addWidget(crash_log_button, 2, 1) # 行2, 列1
++        button_layout.addWidget(crash_log_button, 3, 1) # 行2, 列1
+ 
+         # --- 用户助手按钮 ---
+         user_assistant_button = QtWidgets.QPushButton("🎮 星黎用户助手")
+         user_assistant_button.setStyleSheet(button_style.replace("#4a86e8", "#8e7cc3").replace("#3a76d8", "#7e6bb3").replace("#2a66c8", "#6e5ba3"))
+         user_assistant_button.setToolTip("启动游戏 / 环境自检 / 修复 SKSE 路径 / 复制诊断报告")
+         user_assistant_button.clicked.connect(self.show_user_assistant)
+-        button_layout.addWidget(user_assistant_button, 3, 0)
++        button_layout.addWidget(user_assistant_button, 4, 0)
+ 
+         # --- 内置模组压缩 / 空间优化（仅高级玩家） ---
+         self.compressor_button = QtWidgets.QPushButton("🗜 模组压缩")
+         self.compressor_button.setStyleSheet(button_style.replace("#4a86e8", "#5cb85c").replace("#3a76d8", "#4cae4c").replace("#2a66c8", "#398439"))
+         self.compressor_button.clicked.connect(self.show_mod_compressor)
+-        button_layout.addWidget(self.compressor_button, 3, 1)
++        button_layout.addWidget(self.compressor_button, 4, 1)
+ 
+         # --- LOD 自动化流水线（仅高级玩家） ---
+         self.lod_pipeline_button = QtWidgets.QPushButton("🌲 LOD 自动化")
+         self.lod_pipeline_button.setStyleSheet(button_style.replace("#4a86e8", "#6aa84f").replace("#3a76d8", "#5b943f").replace("#2a66c8", "#4d7f35"))
+         self.lod_pipeline_button.clicked.connect(self.show_lod_pipeline)
+-        button_layout.addWidget(self.lod_pipeline_button, 4, 0)
++        button_layout.addWidget(self.lod_pipeline_button, 5, 0)
+ 
+         # --- 星黎模组管理中心（仅高级玩家） ---
+         self.mod_manager_button = QtWidgets.QPushButton("📦 模组管理中心")
+         self.mod_manager_button.setStyleSheet(button_style.replace("#4a86e8", "#d58512").replace("#3a76d8", "#c67605").replace("#2a66c8", "#ad6704"))
+         self.mod_manager_button.clicked.connect(self.show_mod_manager)
+-        button_layout.addWidget(self.mod_manager_button, 4, 1)
++        button_layout.addWidget(self.mod_manager_button, 5, 1)
+ 
+         # --- 虚拟内存管理按钮 ---
+         page_file_info_button = QtWidgets.QPushButton("ℹ️ 虚拟内存信息")
+         page_file_info_button.setStyleSheet(button_style)
+         page_file_info_button.clicked.connect(self._get_page_file_info)
+-        button_layout.addWidget(page_file_info_button, 5, 0) # 行5, 列0
++        button_layout.addWidget(page_file_info_button, 6, 0) # 行5, 列0
+ 
+         #set_page_file_button = QtWidgets.QPushButton("📝 设置虚拟内存")
+         #set_page_file_button.setStyleSheet(button_style)
+@@ -864,7 +953,7 @@
+         open_system_settings_button = QtWidgets.QPushButton("💻 打开系统设置")
+         open_system_settings_button.setStyleSheet(button_style)
+         open_system_settings_button.clicked.connect(self._open_system_settings)
+-        button_layout.addWidget(open_system_settings_button, 5, 1) # 行5, 列1
++        button_layout.addWidget(open_system_settings_button, 6, 1) # 行5, 列1
+ 
+         # 高级玩家功能：新手模式下隐藏，但不删除，切换模式即可恢复。
+         self._advanced_mode_widgets = [
+@@ -883,8 +972,8 @@
+ 
+         # 设置主窗口布局
+         self.window.setLayout(main_layout)
+-        self.window.setMinimumSize(430, 520) # 增加最小高度
+-        self.window.resize(560, 640) # 增加初始高度
++        self.window.setMinimumSize(460, 560) # 增加最小高度
++        self.win

@@ -1,0 +1,70 @@
+dow.resize(580, 700) # 增加初始高度
+ 
+         # 显示窗口
+         self.window.exec()
+diff -ruN a/xingli_Little_assistant/modpack_health.py b/xingli_Little_assistant/modpack_health.py
+--- a/xingli_Little_assistant/modpack_health.py	1970-01-01 00:00:00.000000000 +0000
++++ b/xingli_Little_assistant/modpack_health.py	2026-09-08 07:13:37.000000000 +0000
+@@ -0,0 +1,517 @@
++# -*- coding: utf-8 -*-
++"""XingLi modpack manifest and health baseline (v2.0.0).
++
++This module deliberately uses profile files for the baseline. It does not walk the
++whole mod directory and does not change MO2 state. That keeps health checks fast and
++safe on large modlists.
++"""
++
++import hashlib
++import json
++import os
++from datetime import datetime
++from typing import Dict, List, Optional, Tuple
++
++try:
++    import PyQt6.QtWidgets as QtWidgets
++    import PyQt6.QtGui as QtGui
++    from PyQt6.QtCore import Qt
++except ImportError:
++    import PyQt5.QtWidgets as QtWidgets
++    import PyQt5.QtGui as QtGui
++    from PyQt5.QtCore import Qt
++
++from . import stability
++
++logger = stability.get_logger("health")
++SCHEMA_VERSION = 1
++MANIFEST_FILE = "xingli_modpack_manifest.json"
++REPORT_FILE = "last_health_report.json"
++
++
++def _exec_dialog(dialog):
++    if hasattr(dialog, "exec"):
++        return dialog.exec()
++    return dialog.exec_()
++
++
++def _accepted():
++    if hasattr(QtWidgets.QDialog, "DialogCode"):
++        return QtWidgets.QDialog.DialogCode.Accepted
++    return QtWidgets.QDialog.Accepted
++
++
++def _plugin_data_root(organizer, plugin_dir: str) -> str:
++    base = ""
++    try:
++        base = str(organizer.pluginDataPath())
++    except Exception:
++        base = ""
++    if base:
++        path = os.path.join(base, "xingli_assistant", "modpack")
++    else:
++        path = os.path.join(plugin_dir, "data", "modpack")
++    os.makedirs(path, exist_ok=True)
++    return path
++
++
++def _profile_path(organizer) -> str:
++    try:
++        value = organizer.profilePath()
++        if value:
++            return os.path.ab

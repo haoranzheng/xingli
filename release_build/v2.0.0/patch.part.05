@@ -1,0 +1,190 @@
+eSheet(
++            "QFrame#healthStatusCard { background: %s; border: 1px solid %s; border-radius: 8px; padding: 4px; }" % (bg, border)
++        )
++        self.status_title.setText(title)
++        self.status_title.setStyleSheet("color: %s;" % fg)
++        self.status_detail.setText(detail)
++
++    def _refresh_baseline_state(self):
++        manifest = self.store.load_manifest()
++        has = bool(manifest)
++        self.check_btn.setEnabled(has)
++        self.update_btn.setEnabled(has)
++        self.create_btn.setEnabled(not has)
++        if manifest:
++            name = str(manifest.get("pack_name", "星黎整合包"))
++            version = str(manifest.get("pack_version", ""))
++            env = manifest.get("environment", {}) if isinstance(manifest.get("environment"), dict) else {}
++            mods = env.get("mods", []) if isinstance(env, dict) else []
++            self._set_card("基准已建立", "{} {} · {} 个 MOD 记录".format(name, version, len(mods)), "neutral")
++            self.details.setPlainText("点击【检查当前状态】比较当前配置与基准。")
++        else:
++            self._set_card("尚未建立基准", "请先确认当前整合包状态正常，再建立当前基准。", "neutral")
++            self.details.setPlainText("基准会记录当前 Profile 的 MOD 启停与顺序、插件列表、加载顺序和 Profile INI。")
++
++    def _choose_meta(self, existing=None) -> Optional[Tuple[str, str]]:
++        existing = existing or {}
++        dialog = BaselineMetaDialog(str(existing.get("pack_name", "星黎整合包")), str(existing.get("pack_version", "1.0.0")), self)
++        if _exec_dialog(dialog) != _accepted():
++            return None
++        name, version = dialog.values()
++        if not name or not version:
++            QtWidgets.QMessageBox.warning(self, "信息不完整", "请填写整合包名称和版本。")
++            return None
++        return name, version
++
++    def create_baseline(self):
++        meta = self._choose_meta()
++        if not meta:
++            return
++        try:
++            data = self.store.save_manifest(meta[0], meta[1])
++            env = data.get("environment", {}) if isinstance(data.get("environment"), dict) else {}
++            self._set_card("基准建立完成", "已记录 {} 个 MOD。".format(len(env.get("mods", []))), "ok")
++            self.details.setPlainText("以后更新 MOD、调整顺序或修改配置后，可以随时运行健康检查。")
++            self._refresh_baseline_state()
++        except Exception as exc:
++            logger.exception("建立整合包基准失败")
++            self._set_card("建立基准失败", str(exc), "error")
++            QtWidgets.QMessageBox.critical(self, "建立失败", str(exc))
++
++    def update_baseline(self):
++        existing = self.store.load_manifest() or {}
++        meta = self._choose_meta(existing)
++        if not meta:
++            return
++        buttons = (
++            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No
++            if hasattr(QtWidgets.QMessageBox, "StandardButton")
++            else QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
++        )
++        yes = QtWidgets.QMessageBox.StandardButton.Yes if hasattr(QtWidgets.QMessageBox, "StandardButton") else QtWidgets.QMessageBox.Yes
++        if QtWidgets.QMessageBox.question(self, "更新基准", "确定用当前整合包状态替换原基准吗？", buttons) != yes:
++            return
++        try:
++            self.store.save_manifest(meta[0], meta[1])
++            self._set_card("基准已更新", "当前状态已成为新的检查基准。", "ok")
++            self.details.setPlainText("基准更新完成。")
++            self._refresh_baseline_state()
++        except Exception as exc:
++            logger.exception("更新整合包基准失败")
++            QtWidgets.QMessageBox.critical(self, "更新失败", str(exc))
++
++    def check_health(self):
++        try:
++            baseline, report = self.store.check()
++            count = int(report.get("issue_count", 0) or 0)
++            if count == 0:
++                self._set_card("整合包状态正常", "当前状态与基准一致。", "ok")
++                self.details.setPlainText("未发现 MOD 启停、顺序、插件列表或 Profile 配置变化。")
++                return
++            self._set_card("发现 {} 项变化".format(count), "请查看下面的变化摘要。", "warn")
++            lines = []
++            missing = report.get("missing_mods", []) or []
++            added = report.get("added_mods", []) or []
++            state_changes = report.get("state_changes", []) or []
++            if missing:
++                lines.append("缺少基准 MOD：{} 个".format(len(missing)))
++                lines.extend("  - {}".format(x) for x in missing[:20])
++                if len(missing) > 20:
++                    lines.append("  …其余 {} 个请查看报告文件".format(len(missing) - 20))
++            if added:
++                lines.append("新增 MOD：{} 个".format(len(added)))
++                lines.extend("  + {}".format(x) for x in added[:20])
++                if len(added) > 20:
++                    lines.append("  …其余 {} 个请查看报告文件".format(len(added) - 20))
++            if state_changes:
++                lines.append("启用状态变化：{} 个".format(len(state_changes)))
++                for item in state_changes[:20]:
++                    expected = "启用" if item.get("expected") else "禁用"
++                    current = "启用" if item.get("current") else "禁用"
++                    lines.append("  * {}：{} → {}".format(item.get("name", ""), expected, current))
++                if len(state_changes) > 20:
++                    lines.append("  …其余 {} 个请查看报告文件".format(len(state_changes) - 20))
++            if report.get("mod_order_changed"):
++                lines.append("MOD 顺序发生变化")
++            changed_files = report.get("profile_file_changes", []) or []
++            if changed_files:
++                labels = {
++                    "plugins.txt": "插件启用列表",
++                    "loadorder.txt": "插件加载顺序",
++                    "Skyrim.ini": "Skyrim.ini",
++                    "SkyrimPrefs.ini": "SkyrimPrefs.ini",
++                    "SkyrimCustom.ini": "SkyrimCustom.ini",
++                }
++                lines.append("配置变化：{}".format("、".join(labels.get(x, x) for x in changed_files)))
++            self.details.setPlainText("\n".join(lines))
++        except Exception as exc:
++            logger.exception("整合包健康检查失败")
++            self._set_card("检查失败", str(exc), "error")
++            QtWidgets.QMessageBox.critical(self, "检查失败", str(exc))
++
++    def open_folder(self):
++        try:
++            if os.name == "nt":
++                os.startfile(self.store.root)  # type: ignore[attr-defined]
++        except Exception as exc:
++            QtWidgets.QMessageBox.warning(self, "无法打开", str(exc))
++
++
++def show_modpack_health(parent, organizer, plugin_dir: str, assistant_version: str):
++    dialog = ModpackHealthDialog(parent, organizer, plugin_dir, assistant_version)
++    return _exec_dialog(dialog)
+diff -ruN a/xingli_Little_assistant/settings.ini b/xingli_Little_assistant/settings.ini
+--- a/xingli_Little_assistant/settings.ini	2026-09-08 04:14:52.000000000 +0000
++++ b/xingli_Little_assistant/settings.ini	2026-09-08 07:17:45.000000000 +0000
+@@ -1,12 +1,9 @@
+ [Settings]
+-gamepath = E:\XLSkyrim3.0\Mod Organizer 2\Stock Game\
+ 
+ [AutoUpdate]
+ autocheckonstartup = true
+-checkintervalhours = 24
+-lastcheck = 
+-skippedversion = 
++lastcheck =
++skippedversion =
+ 
+ [Interface]
+ experiencemode = novice
+-
+diff -ruN a/xingli_Little_assistant/update_manifest.example.json b/xingli_Little_assistant/update_manifest.example.json
+--- a/xingli_Little_assistant/update_manifest.example.json	2026-09-08 06:54:14.000000000 +0000
++++ b/xingli_Little_assistant/update_manifest.example.json	2026-09-08 07:16:57.000000000 +0000
+@@ -2,22 +2,22 @@
+   "schema": 2,
+   "product": "xingli_Little_assistant",
+   "channel": "stable",
+-  "version": "1.9.2-user",
+-  "title": "星黎 MO2 小助手 1.9.2",
++  "version": "2.0.0",
++  "title": "星黎 MO2 小助手 2.0.0",
+   "published_at": "2026-09-08T14:48:00+08:00",
+-  "changelog": "- Gitee 国内主源已启用\n- GitHub 作为备用源\n- SHA256 强制校验\n- 关闭 MO2 后安全替换\n- 失败自动恢复旧版本",
++  "changelog": "更新 UI 优化；主页显示更新状态；新增整合包基线与健康检查。",
+   "package": {
+-    "filename": "xingli_Little_assistant_v1.9.2_update.zip",
++    "filename": "xingli_Little_assistant_v2.0.0_update.zip",
+     "size": 0,
+     "sha256": "REPLACE_WITH_64_HEX_SHA256",
+     "mirrors": [
+       {
+         "name": "Gitee 国内主源",
+-        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v1.9.2_update.zip"
++        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.0.0_update.zip"
+       },
+       {
+         "name": "GitHub 备用源",
+-        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v1.9.2_update.zip"
++        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.0.0_update.zip"
+       }
+     ]
+   }
+diff -ruN a/xingli_Little_assistant/version.ini b/xingli_Little_assistant/version.ini
+--- a/xingli_Little_assistant/version.ini	2026-09-08 04:15:24.000000000 +0000
++++ b/xingli_Little_assistant/version.ini	2026-09-08 07:14:58.000000000 +0000
+@@ -1,2 +1,2 @@
+ [Version]
+-local = 1.9.2
++local = 2.0.0
+

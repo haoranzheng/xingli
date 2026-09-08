@@ -1,0 +1,118 @@
+name: Publish Xingli v2.0.0 update
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'release_build/v2.0.0/**'
+      - '.github/workflows/publish-xingli-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify v1.9.2 base package
+        shell: bash
+        run: |
+          echo "c9408f2fd52343b329222ac736c59c132bfb4a6736f6085d2eba84ff296c3562  update/releases/xingli_Little_assistant_v1.9.2_update.zip" | sha256sum -c -
+          unzip -t update/releases/xingli_Little_assistant_v1.9.2_update.zip >/dev/null
+
+      - name: Rebuild v2.0.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .release_work
+          mkdir -p .release_work
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v1.9.2_update.zip') as z:
+              z.extractall('.release_work')
+          PY
+
+          cat release_build/v2.0.0/patch.part.* > /tmp/xingli-v2.patch
+          patch -p1 -d .release_work < /tmp/xingli-v2.patch
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+
+          root = Path('.release_work/xingli_Little_assistant')
+          if not (root / '__init__.py').is_file():
+              raise SystemExit('plugin root missing after patch')
+
+          entries = []
+          for p in sorted(x for x in root.rglob('*') if x.is_file()):
+              rel = p.relative_to(root).as_posix()
+              entries.append(f'{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n')
+          tree_digest = hashlib.sha256(''.join(entries).encode('utf-8')).hexdigest()
+          expected = '7aeb648ac84ae4d35a1c3f2e4186c137fc1ca98cfbfa160d5e9caa4266c3e1fa'
+          print('source tree digest:', tree_digest)
+          if tree_digest != expected:
+              raise SystemExit(f'source tree digest mismatch: {tree_digest}')
+
+          out = Path('update/releases/xingli_Little_assistant_v2.0.0_update.zip')
+          out.parent.mkdir(parents=True, exist_ok=True)
+          if out.exists():
+              out.unlink()
+          with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for p in sorted(x for x in Path('.release_work').rglob('*') if x.is_file()):
+                  z.write(p, p.relative_to('.release_work').as_posix())
+
+          data = out.read_bytes()
+          package_sha = hashlib.sha256(data).hexdigest()
+          package_size = len(data)
+          print('package size:', package_size)
+          print('package sha256:', package_sha)
+
+          manifest = {
+              'schema': 2,
+              'product': 'xingli_Little_assistant',
+              'channel': 'stable',
+              'version': '2.0.0',
+              'title': '星黎 MO2 小助手 2.0.0',
+              'published_at': '2026-09-08T11:55:00+08:00',
+              'changelog': '优化更新页面并取消检查间隔；主页直接显示更新状态；新增整合包基线与健康检查，可检查 MOD 启停、顺序、插件列表和 Profile 配置变化。',
+              'package': {
+                  'filename': out.name,
+                  'size': package_size,
+                  'sha256': package_sha,
+                  'mirrors': [
+                      {
+                          'name': 'Gitee 国内主源',
+                          'url': 'https://gitee.com/HR-world/xingli/raw/main/update/releases/' + out.name,
+                      },
+                      {
+                          'name': 'GitHub 备用源',
+                          'url': 'https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/' + out.name,
+                      },
+                  ],
+              },
+          }
+          Path('update/latest.json').write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8'
+          )
+          PY
+
+          unzip -t update/releases/xingli_Little_assistant_v2.0.0_update.zip
+
+      - name: Commit verified release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.0.0_update.zip
+          if git diff --cached --quiet; then
+            echo "No release changes"
+            exit 0
+          fi
+          git commit -m "Publish Xingli Assistant v2.0.0 update"
+          git push
