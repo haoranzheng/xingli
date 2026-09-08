@@ -1,1 +1,347 @@
-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
+diff -ruN a/xingli_Little_assistant/CHANGELOG_v2.0.0.md b/xingli_Little_assistant/CHANGELOG_v2.0.0.md
+--- a/xingli_Little_assistant/CHANGELOG_v2.0.0.md	1970-01-01 00:00:00.000000000 +0000
++++ b/xingli_Little_assistant/CHANGELOG_v2.0.0.md	2026-09-08 07:16:56.000000000 +0000
+@@ -0,0 +1,8 @@
++# v2.0.0 — 整合包基线与健康检查
++
++- 更新页取消检查间隔；启动 MO2 后只静默检查一次。
++- 主页直接显示更新状态：正在检查 / 已是最新 / 有新版本 / 检查失败。
++- 更新页面改为状态卡 + 更新说明，减少技术信息和重复设置。
++- 新增「整合包检查」：建立当前 Profile 基准，并检查 MOD 启停、MOD 顺序、插件列表、加载顺序和 Profile INI 是否变化。
++- 健康检查只读，不自动修改用户环境；自动修复留到 v2.1.0。
++- 基准文件使用 JSON 保存，可作为后续整合包 Manifest、更新与诊断系统的基础。
+diff -ruN a/xingli_Little_assistant/MODPACK_HEALTH_README.md b/xingli_Little_assistant/MODPACK_HEALTH_README.md
+--- a/xingli_Little_assistant/MODPACK_HEALTH_README.md	1970-01-01 00:00:00.000000000 +0000
++++ b/xingli_Little_assistant/MODPACK_HEALTH_README.md	2026-09-08 07:16:56.000000000 +0000
+@@ -0,0 +1,22 @@
++# 星黎整合包检查
++
++v2.0.0 首次加入整合包基线系统。
++
++## 使用方式
++
++1. 在你确认整合包运行正常、MOD 启停和顺序已经固定时，点击「建立当前基准」。
++2. 填写整合包名称和版本。
++3. 之后如果安装/删除 MOD、改变启停或顺序、修改插件顺序或 Profile INI，可点击「检查当前状态」。
++4. 检查报告保存在 MO2 pluginDataPath 下的 `xingli_assistant/modpack/`。
++
++## 当前记录范围
++
++- 当前 Profile 的 `modlist.txt`
++- `plugins.txt`
++- `loadorder.txt`
++- `Skyrim.ini`
++- `SkyrimPrefs.ini`
++- `SkyrimCustom.ini`（存在时）
++- MO2 / 游戏 / Profile 基本标识
++
++v2.0.0 不遍历整个 mods 目录，不哈希大型资源文件，也不会自动修复状态。
+diff -ruN a/xingli_Little_assistant/auto_updater.py b/xingli_Little_assistant/auto_updater.py
+--- a/xingli_Little_assistant/auto_updater.py	2026-09-08 04:14:51.000000000 +0000
++++ b/xingli_Little_assistant/auto_updater.py	2026-09-08 07:11:26.000000000 +0000
+@@ -22,7 +22,7 @@
+ import urllib.request
+ import webbrowser
+ import zipfile
+-from datetime import datetime, timedelta
++from datetime import datetime
+ from typing import Dict, List, Optional, Tuple
+ 
+ try:
+@@ -41,9 +41,8 @@
+ SECTION = "AutoUpdate"
+ PRODUCT_ID = "xingli_Little_assistant"
+ SOURCES_FILE = "update_sources.json"
+-DEFAULT_CHECK_INTERVAL_HOURS = 24
+ DEFAULT_TIMEOUT_SECONDS = 8
+-USER_AGENT = "Xingli-MO2-Assistant-Updater/1.9.2"
++USER_AGENT = "Xingli-MO2-Assistant-Updater/2.0.0"
+ PLACEHOLDER_MARKERS = ("YOUR_", "<owner>", "<repo>", "example.com")
+ 
+ 
+@@ -135,22 +134,23 @@
+     section = config[SECTION]
+     defaults = {
+         "AutoCheckOnStartup": "true",
+-        "CheckIntervalHours": str(DEFAULT_CHECK_INTERVAL_HOURS),
+         "LastCheck": "",
+         "SkippedVersion": "",
+     }
+     for key, value in defaults.items():
+         if not section.get(key):
+             section[key] = value
++    # Old builds stored CheckIntervalHours. It is intentionally ignored from v2.0.0.
+     return {k: section.get(k, "") for k in section.keys()}
+ 
+ 
+-def set_update_settings(controller, auto_check: bool, interval_hours: int,
++def set_update_settings(controller, auto_check: bool,
+                         last_check: Optional[str] = None, skipped_version: Optional[str] = None) -> None:
+     path = settings_path(controller)
+     config = _read_ini(path)
+     config[SECTION]["AutoCheckOnStartup"] = "true" if auto_check else "false"
+-    config[SECTION]["CheckIntervalHours"] = str(max(1, int(interval_hours or DEFAULT_CHECK_INTERVAL_HOURS)))
++    # Remove the legacy interval setting so the UI and configuration stay consistent.
++    config[SECTION].pop("CheckIntervalHours", None)
+     if last_check is not None:
+         config[SECTION]["LastCheck"] = last_check
+     if skipped_version is not None:
+@@ -158,6 +158,26 @@
+     _write_ini(path, config)
+ 
+ 
++def _publish_home_status(controller, state: str, latest: str = "", source: str = "", message: str = "") -> None:
++    payload = {
++        "state": str(state or "unknown"),
++        "latest": str(latest or ""),
++        "source": str(source or ""),
++        "message": str(message or ""),
++        "checked_at": datetime.now().isoformat(timespec="seconds"),
++    }
++    try:
++        controller._xingli_update_status = payload
++    except Exception:
++        pass
++    try:
++        callback = getattr(controller, "_set_update_home_status", None)
++        if callable(callback):
++            callback(payload)
++    except Exception:
++        logger.exception("更新主页状态失败")
++
++
+ def _valid_remote_url(url: str) -> bool:
+     value = str(url or "").strip()
+     if not value:
+@@ -525,39 +545,59 @@
+         self._load_settings()
+ 
+     def _build_ui(self):
++        self.setMinimumSize(620, 430)
++        self.resize(680, 480)
+         layout = QtWidgets.QVBoxLayout(self)
++        layout.setContentsMargins(18, 16, 18, 16)
++        layout.setSpacing(12)
++
+         title = QtWidgets.QLabel("星黎助手更新")
+         font = QtGui.QFont()
+         font.setPointSize(15)
+         font.setBold(True)
+         title.setFont(font)
+-        title.setAlignment(_align_center())
+         layout.addWidget(title)
+ 
+-        notice = QtWidgets.QLabel(
+-            "更新优先使用国内镜像；下载后会先校验并准备文件。\n"
+-            "安装时不会强制关闭 MO2，正常关闭 MO2 后会自动更新并重新打开。"
++        subtitle = QtWidgets.QLabel("优先使用国内镜像。更新文件会先校验，关闭 MO2 后再安全替换。")
++        subtitle.setWordWrap(True)
++        subtitle.setStyleSheet("color: #666; padding-bottom: 4px;")
++        layout.addWidget(subtitle)
++
++        self.status_frame = QtWidgets.QFrame()
++        self.status_frame.setObjectName("updateStatusCard")
++        self.status_frame.setStyleSheet(
++            "QFrame#updateStatusCard { background: #f6f8fa; border: 1px solid #d9dee5; "
++            "border-radius: 8px; padding: 4px; }"
+         )
+-        notice.setWordWrap(True)
+-        notice.setAlignment(_align_center())
+-        layout.addWidget(notice)
+-
+-        form = QtWidgets.QFormLayout()
+-        self.local_label = QtWidgets.QLabel(self.local_version)
+-        form.addRow("当前版本：", self.local_label)
+-        self.source_label = QtWidgets.QLabel("尚未检查")
+-        form.addRow("更新源：", self.source_label)
+-        self.auto_check = QtWidgets.QCheckBox("打开 MO2 时自动检查")
+-        form.addRow("自动检查：", self.auto_check)
+-        self.interval_spin = QtWidgets.QSpinBox()
+-        self.interval_spin.setRange(1, 168)
+-        self.interval_spin.setSuffix(" 小时")
+-        form.addRow("检查间隔：", self.interval_spin)
+-        layout.addLayout(form)
++        status_layout = QtWidgets.QVBoxLayout(self.status_frame)
++        status_layout.setContentsMargins(14, 12, 14, 12)
++        status_layout.setSpacing(4)
++        self.status_title = QtWidgets.QLabel("尚未检查更新")
++        status_font = QtGui.QFont()
++        status_font.setPointSize(12)
++        status_font.setBold(True)
++        self.status_title.setFont(status_font)
++        self.status_detail = QtWidgets.QLabel("当前版本 {}".format(self.local_version))
++        self.status_detail.setWordWrap(True)
++        self.status_detail.setStyleSheet("color: #555;")
++        status_layout.addWidget(self.status_title)
++        status_layout.addWidget(self.status_detail)
++        layout.addWidget(self.status_frame)
++
++        option_row = QtWidgets.QHBoxLayout()
++        self.auto_check = QtWidgets.QCheckBox("打开 MO2 时自动检查更新")
++        self.auto_check.setToolTip("每次启动 MO2 后静默检查一次；不会自动下载安装。")
++        self.auto_check.toggled.connect(self._save_auto_check)
++        option_row.addWidget(self.auto_check)
++        option_row.addStretch(1)
++        self.source_label = QtWidgets.QLabel("更新源：尚未检查")
++        self.source_label.setStyleSheet("color: #777;")
++        option_row.addWidget(self.source_label)
++        layout.addLayout(option_row)
+ 
+         buttons = QtWidgets.QHBoxLayout()
+         self.check_button = QtWidgets.QPushButton("检查更新")
+-        self.download_button = QtWidgets.QPushButton("下载并准备")
++        self.download_button = QtWidgets.QPushButton("下载更新")
+         self.install_button = QtWidgets.QPushButton("安装并重启")
+         self.download_button.setEnabled(False)
+         self.install_button.setEnabled(False)
+@@ -569,42 +609,76 @@
+         buttons.addWidget(self.install_button)
+         layout.addLayout(buttons)
+ 
++        details_group = QtWidgets.QGroupBox("更新说明")
++        details_layout = QtWidgets.QVBoxLayout(details_group)
+         self.info_text = QtWidgets.QPlainTextEdit()
+         self.info_text.setReadOnly(True)
+-        layout.addWidget(self.info_text, 1)
++        self.info_text.setPlaceholderText("发现新版本时会在这里显示更新说明。")
++        details_layout.addWidget(self.info_text)
++        layout.addWidget(details_group, 1)
+ 
+         foot = QtWidgets.QHBoxLayout()
+         open_btn = QtWidgets.QPushButton("打开更新目录")
+         open_btn.clicked.connect(self.open_updates_dir)
+-        save_btn = QtWidgets.QPushButton("保存设置")
+-        save_btn.clicked.connect(self.save_settings)
+         close_btn = QtWidgets.QPushButton("关闭")
+         close_btn.clicked.connect(self.close)
+         foot.addWidget(open_btn)
+         foot.addStretch(1)
+-        foot.addWidget(save_btn)
+         foot.addWidget(close_btn)
+         layout.addLayout(foot)
+ 
+     def _load_settings(self):
+         settings = get_update_settings(self.controller)
+         auto = (settings.get("autocheckonstartup") or "true").lower() in ("1", "yes", "true", "on")
++        self.auto_check.blockSignals(True)
+         self.auto_check.setChecked(auto)
+-        try:
+-            interval = int(settings.get("checkintervalhours") or DEFAULT_CHECK_INTERVAL_HOURS)
+-        except Exception:
+-            interval = DEFAULT_CHECK_INTERVAL_HOURS
+-        self.interval_spin.setValue(max(1, min(168, interval)))
++        self.auto_check.blockSignals(False)
++        cached = getattr(self.controller, "_xingli_update_status", None)
++        if isinstance(cached, dict):
++            self._apply_cached_status(cached)
+         result = read_last_update_result(self.controller)
+-        if result:
++        if result and not self.info_text.toPlainText().strip():
+             self.info_text.setPlainText("上次更新：{}\n{}".format(result.get("status", ""), result.get("message", "")))
+ 
+-    def save_settings(self):
+-        set_update_settings(self.controller, self.auto_check.isChecked(), self.interval_spin.value())
+-        QtWidgets.QMessageBox.information(self, "已保存", "更新设置已保存。")
++    def _save_auto_check(self, checked):
++        try:
++            set_update_settings(self.controller, bool(checked))
++        except Exception:
++            logger.exception("保存自动检查设置失败")
++
++    def _set_status_card(self, title, detail, kind="neutral"):
++        palette = {
++            "ok": ("#edf7ed", "#b7ddb8", "#1f6b2a"),
++            "update": ("#fff6e5", "#f1cf8b", "#8a5700"),
++            "busy": ("#eef5ff", "#b8d1f3", "#285a91"),
++            "error": ("#fff0f0", "#e6b3b3", "#9b2c2c"),
++            "neutral": ("#f6f8fa", "#d9dee5", "#444"),
++        }
++        bg, border, fg = palette.get(kind, palette["neutral"])
++        self.status_frame.setStyleSheet(
++            "QFrame#updateStatusCard { background: %s; border: 1px solid %s; border-radius: 8px; padding: 4px; }" % (bg, border)
++        )
++        self.status_title.setText(title)
++        self.status_title.setStyleSheet("color: %s;" % fg)
++        self.status_detail.setText(detail)
++
++    def _apply_cached_status(self, status):
++        state = status.get("state", "unknown")
++        latest = status.get("latest", "")
++        source = status.get("source", "")
++        if source:
++            self.source_label.setText("更新源：{}".format(_source_name(source)))
++        if state == "update_available":
++            self._set_status_card("发现新版本 {}".format(latest), "当前版本 {} · 可以下载更新".format(self.local_version), "update")
++        elif state == "up_to_date":
++            self._set_status_card("已是最新版本", "当前版本 {}".format(self.local_version), "ok")
++        elif state == "checking":
++            self._set_status_card("正在检查更新…", "请稍候", "busy")
++        elif state == "error":
++            self._set_status_card("暂时无法检查更新", status.get("message", "请稍后重试"), "error")
+ 
+     def check_updates(self):
+-        self.save_settings()
++        self._save_auto_check(self.auto_check.isChecked())
+         try:
+             sources = load_update_sources(self.controller)
+             urls = list(sources.get("manifest_urls", []))
+@@ -613,10 +687,12 @@
+             self._on_check_failed(str(exc))
+             return
+         if not urls:
+-            self._on_check_failed("作者尚未配置可用更新源。请先按照 UPDATE_PUBLISH_GUIDE_CN.md 配置国内镜像。")
++            self._on_check_failed("作者尚未配置可用更新源。")
+             return
+-        self.info_text.setPlainText("正在检查更新……")
++        self._set_status_card("正在检查更新…", "正在连接可用镜像", "busy")
++        self.info_text.clear()
+         self.check_button.setEnabled(False)
++        _publish_home_status(self.controller, "checking")
+         self.check_thread = ManifestCheckThread(urls, timeout)
+         self.check_thread.checked.connect(self._on_manifest_checked)
+         self.check_thread.failed.connect(self._on_check_failed)
+@@ -628,28 +704,24 @@
+         self.manifest_source = source
+         latest = str(manifest.get("version", "0.0.0"))
+         newer = compare_versions(latest, self.local_version) > 0
+-        self.source_label.setText(_source_name(source))
+-        package = manifest.get("package", {})
+-        mirrors = package.get("mirrors", []) if isinstance(package, dict) else []
+-        text = [
+-            "状态：{}".format("发现新版本" if newer else "当前已经是最新版本"),
+-            "当前版本：{}".format(self.local_version),
+-            "最新版本：{}".format(latest),
+-            "检查来源：{}".format(_source_name(source)),
+-            "下载镜像：{} 个".format(len(mirrors)),
+-            "文件校验：SHA256 已启用",
+-            "",
+-            "更新说明：",
+-            str(manifest.get("changelog", "未提供更新说明。")),
+-        ]
+-        self.info_text.setPlainText("\n".join(text))
+-        set_update_settings(self.controller, self.auto_check.isChecked(), self.interval_spin.value(),
+-                            last_check=datetime.now().isoformat(timespec="seconds"))
++        self.source_label.setText("更新源：{}".format(_source_name(source)))
++        if newer:
++            self._set_status_card("发现新版本 {}".format(latest), "当前版本 {} · 更新已可用".format(self.local_version), "update")
++            self.info_text.setPlainText(str(manifest.get("changelog", "未提供更新说明。")))
++            state = "update_available"
++        else:
++            self._set_status_card("已是最新版本", "当前版本 {}".format(self.local_version), "ok")
++            self.info_text.setPlainText("当前版本已经是最新版本。")
++            state = "up_to_date"
++        set_update_settings(self.controller, self.auto_check.isChecked(), last_check=datetime.now().isoformat(timespec="seconds"))
++        _publish_home_status(self.controller, state, latest=latest, source=source)
+         self.download_button.setEnabled(newer)
+ 
+     def _on_check_failed(self, error):
+-        self.source_label.setText("检查失败")
+-        self.info_text.setPlainText("检查更新失败：\n{}".format(error))
++        self.source_label.setText("更新源：检查失败")
++        self._set_status_card("暂时无法检查更新", "请检查网络后重试", "error")
++        self.info_text.setPlainText(str(error))
++        _publish_home_status(self.controller, "error", message=str(error))
+         QtWidgets.QMessageBox.warning(self, "检查失败", str(error))
+ 
+     def download_update(self):
+@@ -73
