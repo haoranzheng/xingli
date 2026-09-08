@@ -171,4 +171,3 @@ diff -ruN xingli_v201_base/xingli_Little_assistant/consolidation_controller.py x
 +            text = "⚪ 尚未检查"
 +            tip = "启动后会自动检查整合包内容版本。"
 +            button_text = "检查"
-+
