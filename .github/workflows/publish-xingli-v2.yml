@@ -1,11 +1,11 @@
-name: Publish Xingli v2.0.1 update
+name: Publish Xingli v2.0.2 update
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'release_build/v2.0.1/**'
+      - 'release_build/v2.0.2/**'
       - '.github/workflows/publish-xingli-v2.yml'
 
 permissions:
@@ -19,13 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify v2.0.0 base package
+      - name: Verify v2.0.1 base package
         shell: bash
         run: |
-          echo "ae7b53e65f21ccc390f98f8eb72abd4b1c165fbf7faea1f24f474b27a7b59a4d  update/releases/xingli_Little_assistant_v2.0.0_update.zip" | sha256sum -c -
-          unzip -t update/releases/xingli_Little_assistant_v2.0.0_update.zip >/dev/null
+          echo "314f7b3da4f501d09838cc9a303c46af11c47a117717e719424a7aa090778efd  update/releases/xingli_Little_assistant_v2.0.1_update.zip" | sha256sum -c -
+          unzip -t update/releases/xingli_Little_assistant_v2.0.1_update.zip >/dev/null
 
-      - name: Rebuild v2.0.1
+      - name: Rebuild v2.0.2
         shell: bash
         run: |
           set -euo pipefail
@@ -33,18 +33,18 @@ jobs:
           mkdir -p .release_work
           python3 - <<'PY'
           import zipfile
-          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.0.0_update.zip') as z:
+          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.0.1_update.zip') as z:
               z.extractall('.release_work')
           PY
 
           python3 - <<'PY'
           from pathlib import Path
           import base64, zlib
-          encoded = Path('release_build/v2.0.1/patch.diff').read_text(encoding='utf-8').strip()
+          encoded = Path('release_build/v2.0.2/patch.diff').read_text(encoding='utf-8').strip()
           patch = zlib.decompress(base64.b64decode(encoded))
-          Path('/tmp/xingli-v201.patch').write_bytes(patch)
+          Path('/tmp/xingli-v202.patch').write_bytes(patch)
           PY
-          patch -p2 -d .release_work < /tmp/xingli-v201.patch
+          patch -p1 -d .release_work < /tmp/xingli-v202.patch
 
           python3 - <<'PY'
           from pathlib import Path
@@ -59,12 +59,12 @@ jobs:
               rel = p.relative_to(root).as_posix()
               entries.append(f'{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n')
           tree_digest = hashlib.sha256(''.join(entries).encode('utf-8')).hexdigest()
-          expected = '0790aa3ca85e78f3ca1f034dabf2d13e485f7db9f83a9c3eaa3a690a7897f951'
+          expected = '33189945baad4f114dffee5b322538eb68552c7f586cfa2786a38ca8b4f8b01c'
           print('source tree digest:', tree_digest)
           if tree_digest != expected:
               raise SystemExit(f'source tree digest mismatch: {tree_digest}')
 
-          out = Path('update/releases/xingli_Little_assistant_v2.0.1_update.zip')
+          out = Path('update/releases/xingli_Little_assistant_v2.0.2_update.zip')
           out.parent.mkdir(parents=True, exist_ok=True)
           if out.exists():
               out.unlink()
@@ -82,10 +82,10 @@ jobs:
               'schema': 2,
               'product': 'xingli_Little_assistant',
               'channel': 'stable',
-              'version': '2.0.1',
-              'title': '星黎 MO2 小助手 2.0.1',
-              'published_at': '2026-09-08T15:52:00+08:00',
-              'changelog': '重构主页信息层级，减少重复入口与大面积彩色按钮；高级维护功能收纳分组；MO2 空闲时更新会请求其正常关闭并自动安装重启，若有游戏或工具正在通过 MO2 运行则阻止安装。',
+              'version': '2.0.2',
+              'title': '星黎 MO2 小助手 2.0.2',
+              'published_at': '2026-09-08T17:02:00+08:00',
+              'changelog': '新增整合包内容更新提示：独立检查整合包版本，主页显示状态，发现新版本后自动提示，用户确认后打开作者配置的网盘网页；不会自动下载、安装或修改整合包。',
               'package': {
                   'filename': out.name,
                   'size': package_size,
@@ -107,7 +107,7 @@ jobs:
           )
           PY
 
-          unzip -t update/releases/xingli_Little_assistant_v2.0.1_update.zip
+          unzip -t update/releases/xingli_Little_assistant_v2.0.2_update.zip
 
       - name: Commit verified release
         shell: bash
@@ -115,10 +115,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update/latest.json update/releases/xingli_Little_assistant_v2.0.1_update.zip
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.0.2_update.zip
           if git diff --cached --quiet; then
             echo "No release changes"
             exit 0
           fi
-          git commit -m "Publish Xingli Assistant v2.0.1 update"
+          git commit -m "Publish Xingli Assistant v2.0.2 update"
           git push
