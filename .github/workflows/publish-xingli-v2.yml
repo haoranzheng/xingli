@@ -25,7 +25,7 @@ jobs:
           echo "314f7b3da4f501d09838cc9a303c46af11c47a117717e719424a7aa090778efd  update/releases/xingli_Little_assistant_v2.0.1_update.zip" | sha256sum -c -
           unzip -t update/releases/xingli_Little_assistant_v2.0.1_update.zip >/dev/null
 
-      - name: Rebuild v2.0.2
+      - name: Rebuild and validate v2.0.2
         shell: bash
         run: |
           set -euo pipefail
@@ -40,31 +40,32 @@ jobs:
           cat release_build/v2.0.2/patch.part.* > /tmp/xingli-v202.patch
           patch -p1 -d .release_work < /tmp/xingli-v202.patch
 
-          # The v2.0.1 archive retained CRLF in this large controller while the
-          # verified v2.0.2 source was generated with LF. Normalize only this
-          # text file before the immutable source-tree digest gate.
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('.release_work/xingli_Little_assistant/consolidation_controller.py')
-          text = p.read_text(encoding='utf-8').replace('\r\n', '\n').replace('\r', '\n')
-          with open(str(p), 'w', encoding='utf-8', newline='\n') as handle:
-              handle.write(text)
-          PY
-
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib, json, zipfile
+          import ast, hashlib, json, zipfile
 
           root = Path('.release_work/xingli_Little_assistant')
           if not (root / '__init__.py').is_file():
               raise SystemExit('plugin root missing after patch')
 
+          # Parse every Python source against Python 3.8 grammar before release.
+          py_files = sorted(root.rglob('*.py'))
+          for p in py_files:
+              source = p.read_text(encoding='utf-8-sig')
+              try:
+                  ast.parse(source, filename=str(p), feature_version=(3, 8))
+              except TypeError:
+                  ast.parse(source, filename=str(p), feature_version=8)
+          print('Python 3.8 AST gate: PASS', len(py_files), 'files')
+
+          # Immutable digest of the exact online source reconstructed from the
+          # already-published v2.0.1 archive plus the reviewed v2.0.2 patch.
           entries = []
           for p in sorted(x for x in root.rglob('*') if x.is_file()):
               rel = p.relative_to(root).as_posix()
               entries.append(f'{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n')
           tree_digest = hashlib.sha256(''.join(entries).encode('utf-8')).hexdigest()
-          expected = '33189945baad4f114dffee5b322538eb68552c7f586cfa2786a38ca8b4f8b01c'
+          expected = '6e3f49b11ca27369a8b83a18b28526a66b0c4dbcf6b6c50c58f59ca0952c62ab'
           print('source tree digest:', tree_digest)
           if tree_digest != expected:
               raise SystemExit(f'source tree digest mismatch: {tree_digest}')
@@ -76,6 +77,12 @@ jobs:
           with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
               for p in sorted(x for x in Path('.release_work').rglob('*') if x.is_file()):
                   z.write(p, p.relative_to('.release_work').as_posix())
+
+          # Verify the archive itself before exposing it through latest.json.
+          with zipfile.ZipFile(out, 'r') as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit('zip integrity failure: ' + bad)
 
           data = out.read_bytes()
           package_sha = hashlib.sha256(data).hexdigest()
@@ -112,7 +119,7 @@ jobs:
           )
           PY
 
-          unzip -t update/releases/xingli_Little_assistant_v2.0.2_update.zip
+          unzip -t update/releases/xingli_Little_assistant_v2.0.2_update.zip >/dev/null
 
       - name: Commit verified release
         shell: bash
