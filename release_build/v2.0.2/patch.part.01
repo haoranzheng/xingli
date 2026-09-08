@@ -1,0 +1,194 @@
++        if self.modpack_update_status_label is not None:
++            try:
++                self.modpack_update_status_label.setText(text)
++                self.modpack_update_status_label.setToolTip(tip)
++            except Exception:
++                pass
++        if self.modpack_update_button is not None:
++            try:
++                self.modpack_update_button.setText(button_text)
++                self.modpack_update_button.setToolTip(tip)
++            except Exception:
++                pass
++
++    def show_modpack_update(self):
++        """Check modpack content updates or open the published download page."""
++        try:
++            return modpack_updater.handle_home_action(self)
++        except Exception as e:
++            logger.exception("整合包更新检查失败")
++            QtWidgets.QMessageBox.warning(
++                self.window if hasattr(self, "window") else None,
++                "整合包更新",
++                "无法检查整合包更新：\n{}".format(e),
++            )
++
+     def show_modpack_health(self):
+         """Open the read-only modpack baseline / health check center."""
+         try:
+@@ -863,12 +933,32 @@
+         info_layout.addLayout(path_row)
+ 
+         status_row = QtWidgets.QHBoxLayout()
++        assistant_status_title = QtWidgets.QLabel("助手")
++        assistant_status_title.setMinimumWidth(60)
++        assistant_status_title.setStyleSheet("font-weight:600;")
++        status_row.addWidget(assistant_status_title)
+         self.update_status_label = QtWidgets.QLabel()
+         self.update_status_label.setStyleSheet("color:#4d5359;")
+         status_row.addWidget(self.update_status_label, 1)
+         info_layout.addLayout(status_row)
++
++        pack_status_row = QtWidgets.QHBoxLayout()
++        pack_status_title = QtWidgets.QLabel("整合包")
++        pack_status_title.setMinimumWidth(60)
++        pack_status_title.setStyleSheet("font-weight:600;")
++        pack_status_row.addWidget(pack_status_title)
++        self.modpack_update_status_label = QtWidgets.QLabel()
++        self.modpack_update_status_label.setStyleSheet("color:#4d5359;")
++        pack_status_row.addWidget(self.modpack_update_status_label, 1)
++        self.modpack_update_button = QtWidgets.QPushButton("检查")
++        self.modpack_update_button.setMaximumWidth(86)
++        self.modpack_update_button.clicked.connect(self.show_modpack_update)
++        pack_status_row.addWidget(self.modpack_update_button)
++        info_layout.addLayout(pack_status_row)
++
+         main_layout.addWidget(info_card)
+         self._set_update_home_status(getattr(self, "_xingli_update_status", {}))
++        self._set_modpack_update_home_status(getattr(self, "_xingli_modpack_update_status", {}))
+ 
+         launcher_hint = QtWidgets.QLabel(
+             "只想进入游戏：使用桌面的【星黎整合启动器.bat】。需要检查或维护时再打开本助手。"
+diff -ruN xingli_v201_base/xingli_Little_assistant/modpack_release.json xingli_v202_work/xingli_Little_assistant/modpack_release.json
+--- xingli_v201_base/xingli_Little_assistant/modpack_release.json	1970-01-01 00:00:00.000000000 +0000
++++ xingli_v202_work/xingli_Little_assistant/modpack_release.json	2026-09-08 09:07:07.980473047 +0000
+@@ -0,0 +1,6 @@
++{
++  "schema": 1,
++  "pack_id": "xingli-skyrim",
++  "name": "星黎整合包",
++  "installed_version": ""
++}
+diff -ruN xingli_v201_base/xingli_Little_assistant/modpack_update_sources.json xingli_v202_work/xingli_Little_assistant/modpack_update_sources.json
+--- xingli_v201_base/xingli_Little_assistant/modpack_update_sources.json	1970-01-01 00:00:00.000000000 +0000
++++ xingli_v202_work/xingli_Little_assistant/modpack_update_sources.json	2026-09-08 09:07:07.981542799 +0000
+@@ -0,0 +1,8 @@
++{
++  "schema": 1,
++  "timeout_seconds": 8,
++  "manifest_urls": [
++    "https://gitee.com/HR-world/xingli/raw/main/modpack/latest.json",
++    "https://raw.githubusercontent.com/haoranzheng/xingli/main/modpack/latest.json"
++  ]
++}
+diff -ruN xingli_v201_base/xingli_Little_assistant/modpack_updater.py xingli_v202_work/xingli_Little_assistant/modpack_updater.py
+--- xingli_v201_base/xingli_Little_assistant/modpack_updater.py	1970-01-01 00:00:00.000000000 +0000
++++ xingli_v202_work/xingli_Little_assistant/modpack_updater.py	2026-09-08 09:07:07.979259153 +0000
+@@ -0,0 +1,331 @@
++# -*- coding: utf-8 -*-
++"""Xingli modpack content update notifier.
++
++This subsystem is deliberately separate from the assistant self-updater:
++- it never downloads or modifies the modpack;
++- it only compares the installed pack version with a mirrored remote manifest;
++- when a newer pack is published it asks the user before opening the author's
++  download page in the default browser.
++
++Compatible with MO2 2.4.4 / Python 3.8 / PyQt5, with PyQt6 fallback support.
++"""
++
++import json
++import os
++import re
++import urllib.request
++import webbrowser
++from datetime import datetime
++from typing import Dict, List, Optional, Tuple
++
++try:
++    import PyQt6.QtWidgets as QtWidgets
++    from PyQt6.QtCore import QThread, QTimer, pyqtSignal
++except ImportError:
++    import PyQt5.QtWidgets as QtWidgets
++    from PyQt5.QtCore import QThread, QTimer, pyqtSignal
++
++from . import stability
++
++logger = stability.get_logger("modpack_updater")
++
++PRODUCT_ID = "xingli_modpack"
++LOCAL_RELEASE_FILE = "modpack_release.json"
++SOURCES_FILE = "modpack_update_sources.json"
++DEFAULT_TIMEOUT_SECONDS = 8
++USER_AGENT = "Xingli-Modpack-Update-Notifier/2.0.2"
++
++
++def normalize_version(version: str) -> Tuple[int, ...]:
++    nums = re.findall(r"\d+", str(version or ""))
++    return tuple(int(x) for x in nums[:6]) if nums else (0,)
++
++
++def compare_versions(left: str, right: str) -> int:
++    a = list(normalize_version(left))
++    b = list(normalize_version(right))
++    width = max(len(a), len(b))
++    a += [0] * (width - len(a))
++    b += [0] * (width - len(b))
++    return (a > b) - (a < b)
++
++
++def _plugin_path(controller) -> str:
++    return os.path.abspath(getattr(controller, "plugin_path", os.path.dirname(__file__)))
++
++
++def _plugin_data_modpack_dir(controller) -> str:
++    organizer = getattr(controller, "organizer", None)
++    if organizer:
++        try:
++            root = str(organizer.pluginDataPath() or "")
++            if root:
++                return os.path.join(root, "xingli_assistant", "modpack")
++        except Exception:
++            pass
++    return os.path.join(_plugin_path(controller), "data", "modpack")
++
++
++def _read_json(path: str) -> Optional[Dict[str, object]]:
++    if not path or not os.path.isfile(path):
++        return None
++    try:
++        with open(path, "r", encoding="utf-8-sig") as handle:
++            data = json.load(handle)
++        return data if isinstance(data, dict) else None
++    except Exception:
++        logger.exception("读取 JSON 失败: %s", path)
++        return None
++
++
++def load_local_release(controller) -> Dict[str, str]:
++    """Return installed modpack identity/version without guessing.
++
++    Priority:
++      1. author-shipped modpack_release.json;
++      2. the health-baseline manifest created by the user/author.
++    """
++    local = _read_json(os.path.join(_plugin_path(controller), LOCAL_RELEASE_FILE)) or {}
++    pack_id = str(local.get("pack_id", "xingli-skyrim") or "xingli-skyrim").strip()
++    name = str(local.get("name", "星黎整合包") or "星黎整合包").strip()
++    version = str(local.get("installed_version", "") or "").strip()
++
++    if not version:
++        baseline = _read_json(os.path.join(_plugin_data_modpack_dir(controller), "xingli_modpack_manifest.json")) or {}
++        baseline_version = str(baseline.get("pack_version", "") or "").strip()
++        if baseline_version:
++            version = baseline_version
++            name = str(baseline.get("pack_name", name) or name).strip()
++
++    return {
++        "pack_id": pack_id,
++        "name": name,
++        "installed_version": version,
++    }
++
++
++def load_sources(controller) -> Dict[str, object]:
