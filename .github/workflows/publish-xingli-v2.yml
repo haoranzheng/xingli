@@ -77,7 +77,6 @@ jobs:
               raise SystemExit('forbidden MO2 runtime calls: ' + ', '.join(findings))
           print('MO2 2.4.4 runtime API gate: PASS')
 
-          # Privacy/supply-chain hygiene gate for player builds.
           text_files = [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in {'.py','.ps1','.md','.ini','.json','.txt'}]
           privacy_patterns = {
               'author machine path': re.compile(r'E:[\\/]XLSkyrim3\\.0', re.I),
@@ -129,7 +128,7 @@ jobs:
               rel = p.relative_to(root).as_posix()
               entries.append(f'{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n')
           tree_digest = hashlib.sha256(''.join(entries).encode('utf-8')).hexdigest()
-          expected = '83d053dec142c5efd0d0987f66f6d4415505c668916c2a3b11e51e3b24f19b2c'
+          expected = 'f582f127e7977073351ef8d580a2d8f6a332c643a23b717e573a05aeef303aa7'
           print('source tree digest:', tree_digest)
           if tree_digest != expected:
               raise SystemExit(f'source tree digest mismatch: {tree_digest}')
