@@ -1,0 +1,93 @@
+name: Audit v2.2 clean first-run
+
+on:
+  push:
+    branches: [feature/2.2-clean-first-run]
+    paths:
+      - '.github/workflows/audit-v2.2-clean-first-run.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inspect v2.1.1 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/xingli-v211
+          mkdir -p /tmp/xingli-v211
+          unzip -q update/releases/xingli_Little_assistant_v2.1.1_update.zip -d /tmp/xingli-v211
+          root=/tmp/xingli-v211/xingli_Little_assistant
+          test -f "$root/consolidation_controller.py"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('/tmp/xingli-v211/xingli_Little_assistant')
+          targets = [
+              'consolidation_controller.py',
+              'stability.py',
+              'auto_updater.py',
+              'mainmenu_sync.py',
+              'modpack_health.py',
+              'modpack_repair.py',
+              'mod_ops_assistant.py',
+          ]
+          patterns = [
+              r'_should_show_welcome', r'welcome', r'first.?run', r'onboarding',
+              r'QSettings', r'pending_update', r'pending_health_repair',
+              r'mainmenu_release_cache', r'logs?', r'_XingliUpdates',
+          ]
+          rx = re.compile('|'.join(patterns), re.I)
+
+          for name in targets:
+              p = root / name
+              if not p.exists():
+                  continue
+              lines = p.read_text(encoding='utf-8-sig', errors='replace').splitlines()
+              hits = [i for i, line in enumerate(lines) if rx.search(line)]
+              if not hits:
+                  continue
+              print(f'===== {name} =====')
+              emitted = set()
+              for i in hits:
+                  a = max(0, i - 8)
+                  b = min(len(lines), i + 13)
+                  key = (a, b)
+                  if key in emitted:
+                      continue
+                  emitted.add(key)
+                  print(f'--- lines {a+1}-{b} ---')
+                  for n in range(a, b):
+                      print(f'{n+1:05d}: {lines[n]}')
+
+          print('===== Python files =====')
+          for p in sorted(root.glob('*.py')):
+              print(p.name)
+          PY
+
+      - name: Validate base package hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t update/releases/xingli_Little_assistant_v2.1.1_update.zip >/dev/null
+          python3 - <<'PY'
+          import zipfile
+          p='update/releases/xingli_Little_assistant_v2.1.1_update.zip'
+          with zipfile.ZipFile(p) as z:
+              bad=[]
+              for name in z.namelist():
+                  low=name.replace('\\','/').lower()
+                  base=low.rsplit('/',1)[-1]
+                  if '/logs/' in '/'+low or '/__pycache__/' in '/'+low or '/_xingliupdates/' in '/'+low or base.endswith(('.log','.pyc','.download')) or base=='pending_update.json':
+                      bad.append(name)
+              if bad:
+                  raise SystemExit('runtime artifacts in base package: '+', '.join(bad[:20]))
+          print('base package hygiene: PASS')
+          PY
