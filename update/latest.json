@@ -8,8 +8,8 @@
   "changelog": "隐私加固并简化助手更新交互：进入更新页即自动检查；发现新版本后只保留一个主更新按钮；下载并校验完成后自动询问是否安装；选择稍后可复用已校验安装包；下载取消现在真实生效。",
   "package": {
     "filename": "xingli_Little_assistant_v2.0.5_update.zip",
-    "size": 203686,
-    "sha256": "f7ad883037d80481ce7a34c71412185af8d127291c0673ec4f40a53f4d975795",
+    "size": 203685,
+    "sha256": "82939e71c9a849628ef1926731ed11dae5b9acbe1c9676f48a1afd3b328cb842",
     "mirrors": [
       {
         "name": "Gitee 国内主源",
