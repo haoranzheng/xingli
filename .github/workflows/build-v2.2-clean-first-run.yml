@@ -1,0 +1,291 @@
+name: Build v2.2 clean first-run candidate
+
+on:
+  push:
+    branches: [feature/2.2-clean-first-run]
+    paths:
+      - 'release_build/v2.2.0/**'
+      - '.github/workflows/build-v2.2-clean-first-run.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Expand signed v2.1.1 release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Remove-Item -Recurse -Force .work -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path .work | Out-Null
+          python -c "import zipfile; zipfile.ZipFile(r'update/releases/xingli_Little_assistant_v2.1.1_update.zip').extractall(r'.work')"
+          if (-not (Test-Path '.work/xingli_Little_assistant/consolidation_controller.py')) { throw '2.1.1 plugin root missing' }
+
+      - name: Apply Phase A transform
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python release_build/v2.2.0/apply_phase_a.py .work/xingli_Little_assistant
+
+      - name: Python 3.8 and MO2 compatibility gates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          from pathlib import Path
+          import ast
+
+          root = Path('.work/xingli_Little_assistant')
+          py_files = sorted(root.rglob('*.py'))
+          for path in py_files:
+              source = path.read_text(encoding='utf-8-sig')
+              try:
+                  ast.parse(source, filename=str(path), feature_version=(3, 8))
+              except TypeError:
+                  ast.parse(source, filename=str(path), feature_version=8)
+          print('Python 3.8 AST gate: PASS', len(py_files), 'files')
+
+          forbidden = {'pluginList', 'onPluginStateChanged', 'onModStateChanged', 'onPluginMoved', 'waitForApplication'}
+          findings = []
+          for path in py_files:
+              tree = ast.parse(path.read_text(encoding='utf-8-sig'))
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Call):
+                      fn = node.func
+                      name = fn.attr if isinstance(fn, ast.Attribute) else (fn.id if isinstance(fn, ast.Name) else '')
+                      if name in forbidden:
+                          findings.append('{}:{}:{}'.format(path.name, node.lineno, name))
+          if findings:
+              raise SystemExit('forbidden MO2 runtime calls: ' + ', '.join(findings))
+          print('MO2 2.4.4 runtime API gate: PASS')
+
+          controller = (root / 'consolidation_controller.py').read_text(encoding='utf-8-sig')
+          required = [
+              'DEFAULT_VERSION = "2.2.0"',
+              'mobase.VersionInfo(2, 2, 0)',
+              'instance_identity.resolve_instance_identity',
+              'onboarding_state.should_show_welcome',
+              'onboarding_state.mark_welcome_seen',
+              'welcome_dialog.exec()\n        self._mark_welcome_seen()',
+          ]
+          missing = [x for x in required if x not in controller]
+          if missing:
+              raise SystemExit('Phase A controller integration missing: {!r}'.format(missing))
+          if '_plugin_data_state_dir' in controller:
+              raise SystemExit('legacy in-tree onboarding state helper still present')
+          print('Phase A controller integration gate: PASS')
+          '@ | Set-Content -Encoding UTF8 .work/compat_test.py
+          python .work/compat_test.py
+
+      - name: Real Windows install identity and onboarding tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import importlib.util
+          import json
+          import os
+          import shutil
+          import tempfile
+          from pathlib import Path
+
+          plugin = Path('.work/xingli_Little_assistant').resolve()
+
+          def load(name):
+              spec = importlib.util.spec_from_file_location(name, str(plugin / (name + '.py')))
+              module = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(module)
+              return module
+
+          identity = load('instance_identity')
+          onboarding = load('onboarding_state')
+
+          sandbox = Path(tempfile.mkdtemp(prefix='xingli-v220-test-'))
+          try:
+              local = sandbox / 'LocalAppData'
+              os.environ['LOCALAPPDATA'] = str(local)
+
+              original = sandbox / 'XingliPack'
+              original.mkdir()
+              first_id, method = identity.resolve_instance_identity(str(original))
+              if method != 'win32-file-id':
+                  raise AssertionError('Windows test unexpectedly used identity fallback: ' + method)
+              same_id, _ = identity.resolve_instance_identity(str(original))
+              assert same_id == first_id, 'same directory changed instance id'
+              print('A same physical directory identity: PASS')
+
+              moved = sandbox / 'XingliPackMoved'
+              os.rename(str(original), str(moved))
+              moved_id, moved_method = identity.resolve_instance_identity(str(moved))
+              assert moved_method == 'win32-file-id'
+              assert moved_id == first_id, 'moving same directory on volume changed instance id'
+              print('B same-volume directory move identity: PASS')
+
+              shutil.rmtree(str(moved))
+              moved.mkdir()
+              recreated_id, recreated_method = identity.resolve_instance_identity(str(moved))
+              assert recreated_method == 'win32-file-id'
+              assert recreated_id != first_id, 'delete/recreate at same path reused old instance id'
+              print('C delete and recreate same path becomes new instance: PASS')
+
+              second_copy = sandbox / 'SecondExtraction'
+              second_copy.mkdir()
+              second_id, _ = identity.resolve_instance_identity(str(second_copy))
+              assert second_id not in (first_id, recreated_id), 'new extraction directory reused an instance id'
+              print('D separate extraction becomes new instance: PASS')
+
+              assert onboarding.should_show_welcome(second_id) is True
+              state = Path(onboarding.state_path(second_id))
+              assert str(state).lower().startswith(str(local).lower()), 'state is not under LOCALAPPDATA'
+              assert not str(state).lower().startswith(str(second_copy).lower()), 'state leaked into modpack tree'
+              onboarding.mark_welcome_seen(second_id)
+              assert state.is_file(), 'onboarding state was not written'
+              data = json.loads(state.read_text(encoding='utf-8'))
+              assert data == {'schema': 1, 'first_run_completed': True}
+              assert onboarding.should_show_welcome(second_id) is False
+              print('E first run then second launch state: PASS')
+
+              state.unlink()
+              assert onboarding.should_show_welcome(second_id) is True
+              print('F deleting LocalAppData state restores first run: PASS')
+
+              state.parent.mkdir(parents=True, exist_ok=True)
+              state.write_text('{broken json', encoding='utf-8')
+              assert onboarding.should_show_welcome(second_id) is True
+              assert Path(str(state) + '.corrupt').is_file(), 'corrupt state was not quarantined'
+              print('G corrupt onboarding state fails open to welcome: PASS')
+
+              legacy = second_copy / '_XingliState' / 'onboarding.json'
+              legacy.parent.mkdir(parents=True, exist_ok=True)
+              legacy.write_text(json.dumps({'schema': 1, 'welcome_seen': True}), encoding='utf-8')
+              current = Path(onboarding.state_path(second_id))
+              if current.exists():
+                  current.unlink()
+              corrupt = Path(str(current) + '.corrupt')
+              if corrupt.exists():
+                  corrupt.unlink()
+              assert onboarding.should_show_welcome(second_id) is True, 'legacy in-tree marker suppressed fresh onboarding'
+              print('H legacy packaged welcome_seen cannot suppress new instance: PASS')
+
+              version_independent_id, _ = identity.resolve_instance_identity(str(second_copy))
+              assert version_independent_id == second_id, 'instance identity unexpectedly depends on assistant version'
+              print('I assistant version independence: PASS')
+
+          finally:
+              shutil.rmtree(str(sandbox), ignore_errors=True)
+
+          print('Windows clean-first-run acceptance tests: 9/9 PASS')
+          '@ | Set-Content -Encoding UTF8 .work/windows_acceptance_test.py
+          python .work/windows_acceptance_test.py | Tee-Object -FilePath .work/phase-a-test-report.txt
+
+      - name: Candidate privacy and release hygiene
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          from pathlib import Path
+          import re
+
+          root = Path('.work/xingli_Little_assistant')
+          text_files = [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in {'.py','.ps1','.md','.ini','.json','.txt','.bat'}]
+          privacy_patterns = {
+              'windows user path': re.compile(r'C:[\\/]Users[\\/]', re.I),
+              'known author machine username': re.compile(r'\bm1660\b', re.I),
+              'github token': re.compile(r'(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})'),
+              'openai style secret': re.compile(r'\bsk-[A-Za-z0-9_-]{20,}'),
+          }
+          hits=[]
+          for p in text_files:
+              text=p.read_text(encoding='utf-8-sig', errors='ignore')
+              for label,pattern in privacy_patterns.items():
+                  if pattern.search(text):
+                      hits.append('{}:{}'.format(label,p.relative_to(root)))
+          if hits:
+              raise SystemExit('privacy gate failed: '+', '.join(hits))
+
+          runtime_hits=[]
+          for p in root.rglob('*'):
+              if not p.is_file():
+                  continue
+              rel=p.relative_to(root)
+              parts=[x.lower() for x in rel.parts]
+              name=p.name.lower()
+              if any(x in {'logs','__pycache__','_xingliupdates','.xingli_local'} for x in parts):
+                  runtime_hits.append(str(rel))
+              elif name.endswith(('.log','.download','.pyc')) or '.log.' in name or name in {'pending_update.json','pending_health_repair.json','onboarding.json'}:
+                  runtime_hits.append(str(rel))
+          if runtime_hits:
+              raise SystemExit('runtime state leaked into candidate: '+', '.join(runtime_hits[:30]))
+
+          controller=(root/'consolidation_controller.py').read_text(encoding='utf-8-sig')
+          if 'pluginDataPath()' in controller and '_onboarding' in controller:
+              # pluginDataPath can exist elsewhere in future, but must not be part of the new onboarding block.
+              start=controller.index('    def _modpack_root')
+              end=controller.index('    def _consume_help_request',start)
+              if 'pluginDataPath' in controller[start:end] or '_XingliState' in controller[start:end]:
+                  raise SystemExit('onboarding still references distributable-tree state')
+          print('Privacy/runtime-state hygiene gate: PASS')
+          '@ | Set-Content -Encoding UTF8 .work/hygiene_test.py
+          python .work/hygiene_test.py
+
+      - name: Build v2.2.0 candidate package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          from pathlib import Path
+          import hashlib
+          import json
+          import zipfile
+
+          work=Path('.work')
+          root=work/'xingli_Little_assistant'
+          out=work/'xingli_Little_assistant_v2.2.0_candidate.zip'
+          if out.exists(): out.unlink()
+          with zipfile.ZipFile(str(out),'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(x for x in root.rglob('*') if x.is_file()):
+                  z.write(str(p), p.relative_to(work).as_posix())
+          with zipfile.ZipFile(str(out)) as z:
+              bad=z.testzip()
+              if bad:
+                  raise SystemExit('candidate ZIP integrity failure: '+bad)
+              names=z.namelist()
+              required=[
+                  'xingli_Little_assistant/instance_identity.py',
+                  'xingli_Little_assistant/onboarding_state.py',
+                  'xingli_Little_assistant/consolidation_controller.py',
+                  'xingli_Little_assistant/version.ini',
+              ]
+              missing=[x for x in required if x not in names]
+              if missing:
+                  raise SystemExit('candidate package missing: '+repr(missing))
+              forbidden=[x for x in names if x.lower().endswith('/onboarding.json') or '/_xinglistate/' in x.replace('\\','/').lower()]
+              if forbidden:
+                  raise SystemExit('onboarding runtime state in candidate ZIP: '+repr(forbidden))
+          data=out.read_bytes()
+          manifest={
+              'version':'2.2.0-candidate',
+              'size':len(data),
+              'sha256':hashlib.sha256(data).hexdigest(),
+              'base':'2.1.1',
+              'scope':'Clean First-Run Foundation only',
+          }
+          (work/'candidate-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(manifest,ensure_ascii=False,indent=2))
+          '@ | Set-Content -Encoding UTF8 .work/build_candidate.py
+          python .work/build_candidate.py
+
+      - name: Upload validated candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: xingli-v2.2.0-clean-first-run-candidate
+          path: |
+            .work/xingli_Little_assistant_v2.2.0_candidate.zip
+            .work/candidate-manifest.json
+            .work/phase-a-test-report.txt
+          if-no-files-found: error
