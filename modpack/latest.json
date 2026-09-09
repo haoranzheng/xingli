@@ -1,13 +1,26 @@
 {
-  "schema": 1,
+  "schema": 2,
   "product": "xingli_modpack",
-  "enabled": false,
+  "enabled": true,
   "pack_id": "xingli-skyrim",
   "name": "星黎整合包",
-  "version": "",
-  "title": "",
-  "published_at": "",
-  "changelog": "",
-  "download_page": "",
-  "message": "作者尚未填写当前整合包版本和网盘地址，因此更新提示暂未启用。"
+  "version": "3.3.1",
+  "title": "星黎整合包 3.3.1",
+  "published_at": "2026-09-09T09:53:00+08:00",
+  "changelog": "当前正式稳定版本。后续整合内容更新时只需提升 version 并填写对应更新说明，星黎助手会自动提示用户。",
+  "download_page": "https://pan.quark.cn/s/cb6b1774f50b",
+  "extract_code": "dbrf",
+  "download_pages": [
+    {
+      "name": "夸克网盘",
+      "url": "https://pan.quark.cn/s/cb6b1774f50b",
+      "code": "dbrf"
+    },
+    {
+      "name": "百度网盘",
+      "url": "https://pan.baidu.com/s/1Gbh37U81nsgzseZ0fbM6Mg",
+      "code": "9se4"
+    }
+  ],
+  "message": "整合包内容更新只提供通知与网盘跳转，不会自动修改本地 MOD。"
 }
