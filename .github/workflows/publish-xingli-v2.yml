@@ -1,11 +1,11 @@
-name: Publish Xingli v2.0.2 update
+name: Publish Xingli v2.0.3 update
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'release_build/v2.0.2/**'
+      - 'release_build/v2.0.3/**'
       - '.github/workflows/publish-xingli-v2.yml'
 
 permissions:
@@ -19,13 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify v2.0.1 base package
+      - name: Verify v2.0.2 base package
         shell: bash
         run: |
-          echo "314f7b3da4f501d09838cc9a303c46af11c47a117717e719424a7aa090778efd  update/releases/xingli_Little_assistant_v2.0.1_update.zip" | sha256sum -c -
-          unzip -t update/releases/xingli_Little_assistant_v2.0.1_update.zip >/dev/null
+          echo "53c7aa9ba4cdf870984a46fd005ea239aca6831400b0cdd8b830af41ecf9ae03  update/releases/xingli_Little_assistant_v2.0.2_update.zip" | sha256sum -c -
+          unzip -t update/releases/xingli_Little_assistant_v2.0.2_update.zip >/dev/null
 
-      - name: Rebuild and validate v2.0.2
+      - name: Rebuild and validate v2.0.3
         shell: bash
         run: |
           set -euo pipefail
@@ -33,12 +33,18 @@ jobs:
           mkdir -p .release_work
           python3 - <<'PY'
           import zipfile
-          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.0.1_update.zip') as z:
+          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.0.2_update.zip') as z:
               z.extractall('.release_work')
           PY
 
-          cat release_build/v2.0.2/patch.part.* > /tmp/xingli-v202.patch
-          patch -p1 -d .release_work < /tmp/xingli-v202.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, zlib
+          encoded = Path('release_build/v2.0.3/patch.zb64').read_text(encoding='ascii').strip()
+          patch = zlib.decompress(base64.b64decode(encoded))
+          Path('/tmp/xingli-v203.patch').write_bytes(patch)
+          PY
+          patch -p1 -d .release_work < /tmp/xingli-v203.patch
 
           python3 - <<'PY'
           from pathlib import Path
@@ -57,17 +63,43 @@ jobs:
                   ast.parse(source, filename=str(p), feature_version=8)
           print('Python 3.8 AST gate: PASS', len(py_files), 'files')
 
+          # MO2 2.4.4 dangerous runtime API gate.
+          forbidden = {'pluginList', 'onPluginStateChanged', 'onModStateChanged', 'waitForApplication'}
+          findings = []
+          for p in py_files:
+              tree = ast.parse(p.read_text(encoding='utf-8-sig'))
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Call):
+                      fn = node.func
+                      name = fn.attr if isinstance(fn, ast.Attribute) else (fn.id if isinstance(fn, ast.Name) else '')
+                      if name in forbidden:
+                          findings.append(f'{p.name}:{node.lineno}:{name}')
+          if findings:
+              raise SystemExit('forbidden MO2 runtime calls: ' + ', '.join(findings))
+          print('MO2 2.4.4 runtime API gate: PASS')
+
+          lod = (root / 'lod_pipeline.py').read_text(encoding='utf-8')
+          required_tokens = [
+              '_apply_stage_mod_policy(retry, preserve_saved=True)',
+              '_restore_pipeline_mod_states("流水线全部完成")',
+              '_restore_pipeline_mod_states("流水线失败停止")',
+              'pipeline_original_mod_states',
+          ]
+          missing = [token for token in required_tokens if token not in lod]
+          if missing:
+              raise SystemExit('LOD state restore guard missing: ' + repr(missing))
+
           entries = []
           for p in sorted(x for x in root.rglob('*') if x.is_file()):
               rel = p.relative_to(root).as_posix()
               entries.append(f'{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n')
           tree_digest = hashlib.sha256(''.join(entries).encode('utf-8')).hexdigest()
-          expected = '33189945baad4f114dffee5b322538eb68552c7f586cfa2786a38ca8b4f8b01c'
+          expected = 'ab2623667237f3e660642967c4379360d14ccebe88f67f7319f3ece7c59aa7ad'
           print('source tree digest:', tree_digest)
           if tree_digest != expected:
               raise SystemExit(f'source tree digest mismatch: {tree_digest}')
 
-          out = Path('update/releases/xingli_Little_assistant_v2.0.2_update.zip')
+          out = Path('update/releases/xingli_Little_assistant_v2.0.3_update.zip')
           out.parent.mkdir(parents=True, exist_ok=True)
           if out.exists():
               out.unlink()
@@ -90,10 +122,10 @@ jobs:
               'schema': 2,
               'product': 'xingli_Little_assistant',
               'channel': 'stable',
-              'version': '2.0.2',
-              'title': '星黎 MO2 小助手 2.0.2',
-              'published_at': '2026-09-08T17:02:00+08:00',
-              'changelog': '新增整合包内容更新提示：独立检查整合包版本，主页显示状态，发现新版本后自动提示，用户确认后打开作者配置的网盘网页；不会自动下载、安装或修改整合包。',
+              'version': '2.0.3',
+              'title': '星黎 MO2 小助手 2.0.3',
+              'published_at': '2026-09-09T09:53:00+08:00',
+              'changelog': '正式启用整合包 3.3.1 多网盘更新提示与持久版本记录；修复 Grass/LOD 临时 MOD 状态在完成后不能可靠恢复的问题，并增加流水线级最终状态校准。',
               'package': {
                   'filename': out.name,
                   'size': package_size,
@@ -115,7 +147,7 @@ jobs:
           )
           PY
 
-          unzip -t update/releases/xingli_Little_assistant_v2.0.2_update.zip >/dev/null
+          unzip -t update/releases/xingli_Little_assistant_v2.0.3_update.zip >/dev/null
 
       - name: Commit verified release
         shell: bash
@@ -123,10 +155,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update/latest.json update/releases/xingli_Little_assistant_v2.0.2_update.zip
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.0.3_update.zip
           if git diff --cached --quiet; then
             echo "No release changes"
             exit 0
           fi
-          git commit -m "Publish Xingli Assistant v2.0.2 update"
+          git commit -m "Publish Xingli Assistant v2.0.3 update"
           git push
