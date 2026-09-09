@@ -19,13 +19,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/xingli-v211
-          mkdir -p /tmp/xingli-v211
+          rm -rf /tmp/xingli-v211 audit-output
+          mkdir -p /tmp/xingli-v211 audit-output/source
           unzip -q update/releases/xingli_Little_assistant_v2.1.1_update.zip -d /tmp/xingli-v211
           root=/tmp/xingli-v211/xingli_Little_assistant
           test -f "$root/consolidation_controller.py"
 
-          python3 - <<'PY'
+          cp "$root/consolidation_controller.py" audit-output/source/
+          for f in stability.py auto_updater.py mainmenu_sync.py modpack_health.py modpack_repair.py mod_ops_assistant.py __init__.py; do
+            if [ -f "$root/$f" ]; then cp "$root/$f" audit-output/source/; fi
+          done
+
+          python3 - <<'PY' > audit-output/audit.txt
           from pathlib import Path
           import re
 
@@ -55,14 +60,13 @@ jobs:
               if not hits:
                   continue
               print(f'===== {name} =====')
-              emitted = set()
+              emitted = []
               for i in hits:
-                  a = max(0, i - 8)
-                  b = min(len(lines), i + 13)
-                  key = (a, b)
-                  if key in emitted:
+                  a = max(0, i - 12)
+                  b = min(len(lines), i + 18)
+                  if any(a >= x and b <= y for x, y in emitted):
                       continue
-                  emitted.add(key)
+                  emitted.append((a, b))
                   print(f'--- lines {a+1}-{b} ---')
                   for n in range(a, b):
                       print(f'{n+1:05d}: {lines[n]}')
@@ -71,13 +75,14 @@ jobs:
           for p in sorted(root.glob('*.py')):
               print(p.name)
           PY
+          cat audit-output/audit.txt
 
       - name: Validate base package hygiene
         shell: bash
         run: |
           set -euo pipefail
           unzip -t update/releases/xingli_Little_assistant_v2.1.1_update.zip >/dev/null
-          python3 - <<'PY'
+          python3 - <<'PY' | tee audit-output/hygiene.txt
           import zipfile
           p='update/releases/xingli_Little_assistant_v2.1.1_update.zip'
           with zipfile.ZipFile(p) as z:
@@ -91,3 +96,10 @@ jobs:
                   raise SystemExit('runtime artifacts in base package: '+', '.join(bad[:20]))
           print('base package hygiene: PASS')
           PY
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2.1.1-first-run-audit
+          path: audit-output/
+          if-no-files-found: error
