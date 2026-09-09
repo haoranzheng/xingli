@@ -40,9 +40,13 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import base64, zlib
-          encoded = Path('release_build/v2.0.5/patch.zb64').read_text(encoding='ascii').strip()
-          patch = zlib.decompress(base64.b64decode(encoded))
+          parts = sorted(Path('release_build/v2.0.5').glob('patch.part.*'))
+          if not parts:
+              raise SystemExit('v2.0.5 patch parts missing')
+          encoded = ''.join(p.read_text(encoding='ascii').strip() for p in parts)
+          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
           Path('/tmp/xingli-v205.patch').write_bytes(patch)
+          print('patch parts:', len(parts), 'encoded chars:', len(encoded), 'patch bytes:', len(patch))
           PY
           patch -p1 -d .release_work < /tmp/xingli-v205.patch
 
