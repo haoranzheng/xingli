@@ -2,22 +2,22 @@
   "schema": 2,
   "product": "xingli_Little_assistant",
   "channel": "stable",
-  "version": "2.0.3",
-  "title": "星黎 MO2 小助手 2.0.3",
-  "published_at": "2026-09-09T09:53:00+08:00",
-  "changelog": "正式启用整合包 3.3.1 多网盘更新提示与持久版本记录；修复 Grass/LOD 临时 MOD 状态在完成后不能可靠恢复的问题，并增加流水线级最终状态校准。",
+  "version": "2.0.5",
+  "title": "星黎 MO2 小助手 2.0.5",
+  "published_at": "2026-09-09T11:51:00+08:00",
+  "changelog": "隐私加固并简化助手更新交互：进入更新页即自动检查；发现新版本后只保留一个主更新按钮；下载并校验完成后自动询问是否安装；选择稍后可复用已校验安装包；下载取消现在真实生效。",
   "package": {
-    "filename": "xingli_Little_assistant_v2.0.3_update.zip",
-    "size": 205346,
-    "sha256": "d16604096fe67ee6a9e275ee57f6f0b842f6ea189eb56cabe854782a95a7a8a4",
+    "filename": "xingli_Little_assistant_v2.0.5_update.zip",
+    "size": 203686,
+    "sha256": "f7ad883037d80481ce7a34c71412185af8d127291c0673ec4f40a53f4d975795",
     "mirrors": [
       {
         "name": "Gitee 国内主源",
-        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.0.3_update.zip"
+        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.0.5_update.zip"
       },
       {
         "name": "GitHub 备用源",
-        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.0.3_update.zip"
+        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.0.5_update.zip"
       }
     ]
   }
