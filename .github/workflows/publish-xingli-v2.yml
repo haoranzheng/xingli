@@ -1,11 +1,11 @@
-name: Publish Xingli v2.0.3 update
+name: Publish Xingli v2.0.5 update
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'release_build/v2.0.3/**'
+      - 'release_build/v2.0.5/**'
       - '.github/workflows/publish-xingli-v2.yml'
 
 permissions:
@@ -19,13 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify v2.0.2 base package
+      - name: Verify v2.0.3 base package
         shell: bash
         run: |
-          echo "53c7aa9ba4cdf870984a46fd005ea239aca6831400b0cdd8b830af41ecf9ae03  update/releases/xingli_Little_assistant_v2.0.2_update.zip" | sha256sum -c -
-          unzip -t update/releases/xingli_Little_assistant_v2.0.2_update.zip >/dev/null
+          echo "d16604096fe67ee6a9e275ee57f6f0b842f6ea189eb56cabe854782a95a7a8a4  update/releases/xingli_Little_assistant_v2.0.3_update.zip" | sha256sum -c -
+          unzip -t update/releases/xingli_Little_assistant_v2.0.3_update.zip >/dev/null
 
-      - name: Rebuild and validate v2.0.3
+      - name: Rebuild and validate v2.0.5
         shell: bash
         run: |
           set -euo pipefail
@@ -33,22 +33,22 @@ jobs:
           mkdir -p .release_work
           python3 - <<'PY'
           import zipfile
-          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.0.2_update.zip') as z:
+          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.0.3_update.zip') as z:
               z.extractall('.release_work')
           PY
 
           python3 - <<'PY'
           from pathlib import Path
           import base64, zlib
-          encoded = Path('release_build/v2.0.3/patch.zb64').read_text(encoding='ascii').strip()
+          encoded = Path('release_build/v2.0.5/patch.zb64').read_text(encoding='ascii').strip()
           patch = zlib.decompress(base64.b64decode(encoded))
-          Path('/tmp/xingli-v203.patch').write_bytes(patch)
+          Path('/tmp/xingli-v205.patch').write_bytes(patch)
           PY
-          patch -p1 -d .release_work < /tmp/xingli-v203.patch
+          patch -p1 -d .release_work < /tmp/xingli-v205.patch
 
           python3 - <<'PY'
           from pathlib import Path
-          import ast, hashlib, json, zipfile
+          import ast, hashlib, json, re, zipfile
 
           root = Path('.release_work/xingli_Little_assistant')
           if not (root / '__init__.py').is_file():
@@ -63,7 +63,6 @@ jobs:
                   ast.parse(source, filename=str(p), feature_version=8)
           print('Python 3.8 AST gate: PASS', len(py_files), 'files')
 
-          # MO2 2.4.4 dangerous runtime API gate.
           forbidden = {'pluginList', 'onPluginStateChanged', 'onModStateChanged', 'waitForApplication'}
           findings = []
           for p in py_files:
@@ -78,28 +77,64 @@ jobs:
               raise SystemExit('forbidden MO2 runtime calls: ' + ', '.join(findings))
           print('MO2 2.4.4 runtime API gate: PASS')
 
-          lod = (root / 'lod_pipeline.py').read_text(encoding='utf-8')
-          required_tokens = [
-              '_apply_stage_mod_policy(retry, preserve_saved=True)',
-              '_restore_pipeline_mod_states("流水线全部完成")',
-              '_restore_pipeline_mod_states("流水线失败停止")',
-              'pipeline_original_mod_states',
+          # Privacy/supply-chain hygiene gate for player builds.
+          text_files = [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in {'.py','.ps1','.md','.ini','.json','.txt'}]
+          privacy_patterns = {
+              'author machine path': re.compile(r'E:[\\/]XLSkyrim3\\.0', re.I),
+              'windows user path': re.compile(r'C:[\\/]Users[\\/]', re.I),
+              'known author machine username': re.compile(r'\\bm1660\\b', re.I),
+              'share tracking parameter': re.compile(r'vd_source=', re.I),
+              'github token': re.compile(r'(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})'),
+              'openai style secret': re.compile(r'\\bsk-[A-Za-z0-9_-]{20,}'),
+          }
+          privacy_hits = []
+          for p in text_files:
+              text = p.read_text(encoding='utf-8-sig', errors='ignore')
+              for label, pattern in privacy_patterns.items():
+                  if pattern.search(text):
+                      privacy_hits.append(f'{label}:{p.relative_to(root)}')
+          if privacy_hits:
+              raise SystemExit('privacy gate failed: ' + ', '.join(privacy_hits))
+
+          forbidden_release_paths = [
+              root / 'author_tools',
+              root / 'UPDATE_PUBLISH_GUIDE_CN.md',
+              root / 'MODPACK_UPDATE_GUIDE_CN.md',
+              root / 'update_manifest.example.json',
           ]
-          missing = [token for token in required_tokens if token not in lod]
+          leaked = [str(p.relative_to(root)) for p in forbidden_release_paths if p.exists()]
+          if leaked:
+              raise SystemExit('author-only files leaked into player build: ' + ', '.join(leaked))
+          print('Privacy/release hygiene gate: PASS')
+
+          updater = (root / 'auto_updater.py').read_text(encoding='utf-8')
+          ux_tokens = [
+              'QTimer.singleShot(0, dialog.check_updates)',
+              '立即安装已下载更新',
+              '_try_prepare_cached_package',
+              'self.progress.canceled.connect(self.download_thread.requestInterruption)',
+              'ALLOWED_UPDATE_HOSTS',
+          ]
+          missing = [token for token in ux_tokens if token not in updater]
           if missing:
-              raise SystemExit('LOD state restore guard missing: ' + repr(missing))
+              raise SystemExit('update UX/security guard missing: ' + repr(missing))
+
+          modpack = (root / 'modpack_updater.py').read_text(encoding='utf-8')
+          for token in ['ALLOWED_MANIFEST_HOSTS', 'ALLOWED_DOWNLOAD_HOSTS']:
+              if token not in modpack:
+                  raise SystemExit('modpack URL safety guard missing: ' + token)
 
           entries = []
           for p in sorted(x for x in root.rglob('*') if x.is_file()):
               rel = p.relative_to(root).as_posix()
               entries.append(f'{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n')
           tree_digest = hashlib.sha256(''.join(entries).encode('utf-8')).hexdigest()
-          expected = 'ab2623667237f3e660642967c4379360d14ccebe88f67f7319f3ece7c59aa7ad'
+          expected = '83d053dec142c5efd0d0987f66f6d4415505c668916c2a3b11e51e3b24f19b2c'
           print('source tree digest:', tree_digest)
           if tree_digest != expected:
               raise SystemExit(f'source tree digest mismatch: {tree_digest}')
 
-          out = Path('update/releases/xingli_Little_assistant_v2.0.3_update.zip')
+          out = Path('update/releases/xingli_Little_assistant_v2.0.5_update.zip')
           out.parent.mkdir(parents=True, exist_ok=True)
           if out.exists():
               out.unlink()
@@ -122,10 +157,10 @@ jobs:
               'schema': 2,
               'product': 'xingli_Little_assistant',
               'channel': 'stable',
-              'version': '2.0.3',
-              'title': '星黎 MO2 小助手 2.0.3',
-              'published_at': '2026-09-09T09:53:00+08:00',
-              'changelog': '正式启用整合包 3.3.1 多网盘更新提示与持久版本记录；修复 Grass/LOD 临时 MOD 状态在完成后不能可靠恢复的问题，并增加流水线级最终状态校准。',
+              'version': '2.0.5',
+              'title': '星黎 MO2 小助手 2.0.5',
+              'published_at': '2026-09-09T11:51:00+08:00',
+              'changelog': '隐私加固并简化助手更新交互：进入更新页即自动检查；发现新版本后只保留一个主更新按钮；下载并校验完成后自动询问是否安装；选择稍后可复用已校验安装包；下载取消现在真实生效。',
               'package': {
                   'filename': out.name,
                   'size': package_size,
@@ -147,7 +182,7 @@ jobs:
           )
           PY
 
-          unzip -t update/releases/xingli_Little_assistant_v2.0.3_update.zip >/dev/null
+          unzip -t update/releases/xingli_Little_assistant_v2.0.5_update.zip >/dev/null
 
       - name: Commit verified release
         shell: bash
@@ -155,10 +190,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update/latest.json update/releases/xingli_Little_assistant_v2.0.3_update.zip
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.0.5_update.zip
           if git diff --cached --quiet; then
             echo "No release changes"
             exit 0
           fi
-          git commit -m "Publish Xingli Assistant v2.0.3 update"
+          git commit -m "Publish Xingli Assistant v2.0.5 update"
           git push
