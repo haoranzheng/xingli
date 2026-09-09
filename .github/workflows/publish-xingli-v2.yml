@@ -1,11 +1,11 @@
-name: Publish Xingli v2.0.6 update
+name: Publish Xingli v2.1.0 update
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'release_build/v2.0.6/**'
+      - 'release_build/v2.1.0/**'
       - '.github/workflows/publish-xingli-v2.yml'
 
 permissions:
@@ -19,13 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify v2.0.5 base package
+      - name: Verify v2.0.6 base package
         shell: bash
         run: |
-          echo "82939e71c9a849628ef1926731ed11dae5b9acbe1c9676f48a1afd3b328cb842  update/releases/xingli_Little_assistant_v2.0.5_update.zip" | sha256sum -c -
-          unzip -t update/releases/xingli_Little_assistant_v2.0.5_update.zip >/dev/null
+          echo "e5b266eb6756eb82fdb18f9484a3b092e3e3cd973265b00a0e7969d6b5f47be4  update/releases/xingli_Little_assistant_v2.0.6_update.zip" | sha256sum -c -
+          unzip -t update/releases/xingli_Little_assistant_v2.0.6_update.zip >/dev/null
 
-      - name: Rebuild and validate v2.0.6
+      - name: Rebuild and validate v2.1.0
         shell: bash
         run: |
           set -euo pipefail
@@ -33,22 +33,22 @@ jobs:
           mkdir -p .release_work
           python3 - <<'PYBUILD'
           import zipfile
-          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.0.5_update.zip') as z:
+          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.0.6_update.zip') as z:
               z.extractall('.release_work')
           PYBUILD
 
           python3 - <<'PYBUILD'
           from pathlib import Path
           import base64, zlib
-          parts = sorted(Path('release_build/v2.0.6').glob('patch.part.*'))
+          parts = sorted(Path('release_build/v2.1.0').glob('patch.part.*'))
           if not parts:
-              raise SystemExit('v2.0.6 patch parts missing')
+              raise SystemExit('v2.1.0 patch parts missing')
           encoded = ''.join(p.read_text(encoding='ascii').strip() for p in parts)
           patch = zlib.decompress(base64.b64decode(encoded, validate=True))
-          Path('/tmp/xingli-v206.patch').write_bytes(patch)
+          Path('/tmp/xingli-v210.patch').write_bytes(patch)
           print('patch parts:', len(parts), 'encoded chars:', len(encoded), 'patch bytes:', len(patch))
           PYBUILD
-          patch -p1 -d .release_work < /tmp/xingli-v206.patch
+          patch -p1 -d .release_work < /tmp/xingli-v210.patch
 
           python3 - <<'PYBUILD'
           from pathlib import Path
@@ -133,9 +133,6 @@ jobs:
               'Cleanup-AfterSuccess',
               '_validate_update_archive_hygiene',
               'UPDATE_BACKUP_LIMIT = 1',
-              '$PackagePath =',
-              '$LogDir =',
-              '$FallbackLogDir =',
               'QTimer.singleShot(0, dialog.check_updates)',
               '立即安装已下载更新',
               'self.progress.canceled.connect(self.download_thread.requestInterruption)',
@@ -154,17 +151,44 @@ jobs:
               if token not in modpack:
                   raise SystemExit('modpack URL safety guard missing: ' + token)
 
+          health = (root / 'modpack_health.py').read_text(encoding='utf-8')
+          repair = (root / 'modpack_repair.py').read_text(encoding='utf-8')
+          health_tokens = [
+              'SCHEMA_VERSION = 2',
+              'include_repair_data=True',
+              'class RepairPreviewDialog',
+              '一键修复安全项目',
+              'ModpackRepairService',
+          ]
+          repair_tokens = [
+              'class ModpackRepairService',
+              'pending_health_repair.json',
+              'self.mod_tx.apply',
+              'restore_states',
+              'setPriority',
+              'content_b64',
+              'recover_pending',
+          ]
+          missing = [token for token in health_tokens if token not in health]
+          missing += [token for token in repair_tokens if token not in repair]
+          if missing:
+              raise SystemExit('health repair guard missing: ' + repr(missing))
+          destructive = [token for token in ['installMod(', 'removeMod('] if token in repair]
+          if destructive:
+              raise SystemExit('health repair must not install/remove MODs: ' + repr(destructive))
+          print('Health safe-repair gate: PASS')
+
           entries = []
           for p in sorted(x for x in root.rglob('*') if x.is_file()):
               rel = p.relative_to(root).as_posix()
               entries.append(f'{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n')
           tree_digest = hashlib.sha256(''.join(entries).encode('utf-8')).hexdigest()
-          expected = 'b7f0900cead49cc8533d9f12e28d5a817db9d9a862a68acbb07ee9ddb91ac08d'
+          expected = '5da43188af6e504a9101922cd1649f8ea5ea424388d152940eef10e2e4bae7dd'
           print('source tree digest:', tree_digest)
           if tree_digest != expected:
               raise SystemExit(f'source tree digest mismatch: {tree_digest}')
 
-          out = Path('update/releases/xingli_Little_assistant_v2.0.6_update.zip')
+          out = Path('update/releases/xingli_Little_assistant_v2.1.0_update.zip')
           out.parent.mkdir(parents=True, exist_ok=True)
           if out.exists():
               out.unlink()
@@ -198,10 +222,10 @@ jobs:
               'schema': 2,
               'product': 'xingli_Little_assistant',
               'channel': 'stable',
-              'version': '2.0.6',
-              'title': '星黎 MO2 小助手 2.0.6',
-              'published_at': '2026-09-09T12:26:12+08:00',
-              'changelog': '更新空间卫生：安装成功后自动删除更新 ZIP、staging、pending 和星黎助手旧日志；启动时清理孤立缓存；更新备份最多保留 1 份；玩家更新包禁止携带任何运行日志、下载临时文件或 Python 缓存。',
+              'version': '2.1.0',
+              'title': '星黎 MO2 小助手 2.1.0',
+              'published_at': '2026-09-09T13:04:00+08:00',
+              'changelog': '整合包健康检查升级为可回滚安全修复：支持 MOD 启停、同 MOD 集合下的左侧顺序、以及基准配置文件精确恢复；修复前预览、失败自动回滚、异常退出后恢复。缺失/新增 MOD、安装卸载与存档始终只报告不自动处理。',
               'package': {
                   'filename': out.name,
                   'size': package_size,
@@ -223,7 +247,7 @@ jobs:
           )
           PYBUILD
 
-          unzip -t update/releases/xingli_Little_assistant_v2.0.6_update.zip >/dev/null
+          unzip -t update/releases/xingli_Little_assistant_v2.1.0_update.zip >/dev/null
 
       - name: Commit verified release
         shell: bash
@@ -231,10 +255,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update/latest.json update/releases/xingli_Little_assistant_v2.0.6_update.zip
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.1.0_update.zip
           if git diff --cached --quiet; then
             echo "No release changes"
             exit 0
           fi
-          git commit -m "Publish Xingli Assistant v2.0.6 update"
+          git commit -m "Publish Xingli Assistant v2.1.0 update"
           git push
