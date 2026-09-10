@@ -31,6 +31,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           python release_build/v2.2.0/apply_bees_requirement.py
 
+      - name: Enforce Xingli-before-MO2 update shutdown order
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python release_build/v2.2.0/apply_update_shutdown_order.py
+
       - name: Prepare stable release files
         shell: pwsh
         run: |
