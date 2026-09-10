@@ -6,4 +6,5 @@
 - 新增【PBR / PGPatcher】适配：自动发现 PGPatcher.exe，并通过当前 MO2 VFS 启动。
 - 启动前检查 ModOrganizer.ini、旧 PGPatcher 输出和 DynDOLOD 输出；旧输出已启用时可由小助手安全禁用。
 - 显示推荐 MO2 Instance / PGPatcher_Output 路径，并提示 TruePBR + Community Shaders 与 BodySlide → PGPatcher → TexGen → DynDOLOD 顺序。
+- 对 Skyrim 1.5.97–1.6.659 明确提示 PGPatcher 官方要求 Backported Extended ESL Support (BEES)。
 - 用户助手自检与内置教程新增 PGPatcher / TruePBR 检查和说明。
