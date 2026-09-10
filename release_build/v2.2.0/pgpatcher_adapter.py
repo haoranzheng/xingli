@@ -2,7 +2,9 @@
 """PGPatcher integration helpers for Xingli Assistant.
 
 The adapter deliberately launches PGPatcher through MO2's startApplication so it
-sees the current USVFS load order.  It never edits PGPatcher's own cfg files.
+sees the current USVFS load order. It never edits PGPatcher's own cfg files.
+DynDOLOD and TexGen output states are checked before launch to preserve the
+recommended PGPatcher -> TexGen -> DynDOLOD generation order.
 """
 
 import os
