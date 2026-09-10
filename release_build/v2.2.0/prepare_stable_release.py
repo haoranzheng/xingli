@@ -25,6 +25,7 @@ def main() -> int:
             'xingli_Little_assistant/pgpatcher_adapter.py',
             'xingli_Little_assistant/CHANGELOG_v2.2.0.md',
             'xingli_Little_assistant/instance_identity.py',
+            'xingli_Little_assistant/auto_updater.py',
         ]:
             if required not in names:
                 raise RuntimeError('release content missing: ' + required)
@@ -40,7 +41,7 @@ def main() -> int:
         'version': '2.2.0',
         'title': '星黎 MO2 小助手 2.2.0',
         'published_at': PUBLISHED_AT,
-        'changelog': '2.2.0：修复整合包重新解压后的真实首次启动状态；新增 PGPatcher / TruePBR 适配，可自动发现 PGPatcher、通过当前 MO2 VFS 启动、检查并安全禁用旧 PGPatcher 输出、阻止 DynDOLOD 输出状态冲突，并补充正确的 PBR 生成顺序与内置教程；Skyrim 1.5.97–1.6.659 会明确提示 PGPatcher 官方要求 Backported Extended ESL Support (BEES)。',
+        'changelog': '2.2.0：修复整合包重新解压后的真实首次启动状态；新增 PGPatcher / TruePBR 适配，可自动发现 PGPatcher、通过当前 MO2 VFS 启动、检查并安全禁用旧 PGPatcher 输出、阻止 DynDOLOD 输出状态冲突，并补充正确的 PBR 生成顺序与内置教程；Skyrim 1.5.97–1.6.659 会明确提示 PGPatcher 官方要求 Backported Extended ESL Support (BEES)；优化助手自更新退出顺序，先关闭星黎小助手界面，再请求 MO2 正常关闭，随后执行更新替换。',
         'package': {
             'filename': RELEASE.name,
             'size': package_size,
