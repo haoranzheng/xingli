@@ -62,6 +62,7 @@ jobs:
                   'xingli_Little_assistant/onboarding_state.py',
                   'xingli_Little_assistant/CHANGELOG_v2.2.0.md',
                   'xingli_Little_assistant/consolidation_controller.py',
+                  'xingli_Little_assistant/tutorial_data.py',
               ]
               missing = [x for x in required if x not in names]
               if missing:
@@ -87,12 +88,16 @@ jobs:
 
               controller = z.read('xingli_Little_assistant/consolidation_controller.py').decode('utf-8-sig')
               adapter = z.read('xingli_Little_assistant/pgpatcher_adapter.py').decode('utf-8-sig')
-              for token in ['VersionInfo(2, 2, 0)', 'PBR / PGPatcher', 'def launch_pgpatcher']:
+              tutorial = z.read('xingli_Little_assistant/tutorial_data.py').decode('utf-8-sig')
+              changelog = z.read('xingli_Little_assistant/CHANGELOG_v2.2.0.md').decode('utf-8-sig')
+              for token in ['VersionInfo(2, 2, 0)', 'PBR / PGPatcher', 'def launch_pgpatcher', 'Backported Extended ESL Support (BEES)']:
                   if token not in controller:
                       raise SystemExit('controller release gate missing: ' + token)
               for token in ['PGPatcher_Output', 'DynDOLOD', 'organizer.startApplication(exe, [], cwd)', 'set_active(names, False, verify=False)']:
                   if token not in adapter:
                       raise SystemExit('PGPatcher release gate missing: ' + token)
+              if 'Backported Extended ESL Support (BEES)' not in tutorial or 'Backported Extended ESL Support (BEES)' not in changelog:
+                  raise SystemExit('BEES release guidance missing from tutorial/changelog')
 
           print('Published Xingli Assistant v2.2.0 verification: PASS')
           print('size:', len(data))
