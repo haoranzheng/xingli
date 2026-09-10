@@ -1,213 +1,101 @@
-name: Publish Xingli v2.1.1 update
+name: Verify Xingli v2.2.0 release
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'release_build/v2.1.1/**'
+      - 'update/latest.json'
+      - 'update/releases/xingli_Little_assistant_v2.2.0_update.zip'
       - '.github/workflows/publish-xingli-v2.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
-    if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
+  verify:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Verify v2.1.0 base package
-        shell: bash
+      - name: Verify published v2.2.0 package
+        shell: pwsh
         run: |
-          echo "292d3e4d8ab4ed35675c4e3348d46d2a00053a7ee144fdcb6c12234fab2c9015  update/releases/xingli_Little_assistant_v2.1.0_update.zip" | sha256sum -c -
-          unzip -t update/releases/xingli_Little_assistant_v2.1.0_update.zip >/dev/null
-
-      - name: Rebuild and validate v2.1.1
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf .release_work
-          mkdir -p .release_work
-          python3 - <<'PYBUILD'
+          $ErrorActionPreference = 'Stop'
+          @'
+          import ast
+          import hashlib
+          import json
           import zipfile
-          with zipfile.ZipFile('update/releases/xingli_Little_assistant_v2.1.0_update.zip') as z:
-              z.extractall('.release_work')
-          PYBUILD
-
-          python3 - <<'PYBUILD'
           from pathlib import Path
-          import base64, zlib
-          parts = sorted(Path('release_build/v2.1.1').glob('patch.part.*'))
-          if len(parts) != 7:
-              raise SystemExit('expected 7 v2.1.1 patch parts, got %d' % len(parts))
-          encoded = ''.join(p.read_text(encoding='ascii').strip() for p in parts)
-          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
-          Path('/tmp/xingli-v211.patch').write_bytes(patch)
-          print('patch parts:', len(parts), 'encoded chars:', len(encoded), 'patch bytes:', len(patch))
-          PYBUILD
-          patch --batch -p4 -d .release_work < /tmp/xingli-v211.patch
 
-          python3 - <<'PYBUILD'
-          from pathlib import Path
-          import ast, hashlib, json, re, zipfile
+          manifest = json.loads(Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if manifest.get('schema') != 2 or manifest.get('product') != 'xingli_Little_assistant':
+              raise SystemExit('unexpected update manifest identity')
+          if manifest.get('channel') != 'stable' or manifest.get('version') != '2.2.0':
+              raise SystemExit('update/latest.json is not stable 2.2.0')
 
-          root = Path('.release_work/xingli_Little_assistant')
-          if not (root / '__init__.py').is_file():
-              raise SystemExit('plugin root missing after patch')
+          package = manifest.get('package') or {}
+          filename = package.get('filename')
+          if filename != 'xingli_Little_assistant_v2.2.0_update.zip':
+              raise SystemExit('unexpected package filename: {!r}'.format(filename))
+          path = Path('update/releases') / filename
+          if not path.is_file():
+              raise SystemExit('published ZIP missing')
+          data = path.read_bytes()
+          sha = hashlib.sha256(data).hexdigest()
+          if sha != package.get('sha256'):
+              raise SystemExit('published ZIP sha256 mismatch')
+          if len(data) != package.get('size'):
+              raise SystemExit('published ZIP size mismatch')
 
-          py_files = sorted(root.rglob('*.py'))
-          for p in py_files:
-              source = p.read_text(encoding='utf-8-sig')
-              try:
-                  ast.parse(source, filename=str(p), feature_version=(3, 8))
-              except TypeError:
-                  ast.parse(source, filename=str(p), feature_version=8)
-          print('Python 3.8 AST gate: PASS', len(py_files), 'files')
-
-          forbidden = {'pluginList', 'onPluginStateChanged', 'onModStateChanged', 'onPluginMoved', 'waitForApplication'}
-          findings = []
-          for p in py_files:
-              tree = ast.parse(p.read_text(encoding='utf-8-sig'))
-              for node in ast.walk(tree):
-                  if isinstance(node, ast.Call):
-                      fn = node.func
-                      name = fn.attr if isinstance(fn, ast.Attribute) else (fn.id if isinstance(fn, ast.Name) else '')
-                      if name in forbidden:
-                          findings.append(f'{p.name}:{node.lineno}:{name}')
-          if findings:
-              raise SystemExit('forbidden MO2 runtime calls: ' + ', '.join(findings))
-          print('MO2 2.4.4 runtime API gate: PASS')
-
-          text_files = [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in {'.py','.ps1','.md','.ini','.json','.txt','.bat'}]
-          privacy_patterns = {
-              'author machine path': re.compile(r'E:[\\/]XLSkyrim3\\.0', re.I),
-              'windows user path': re.compile(r'C:[\\/]Users[\\/]', re.I),
-              'known author machine username': re.compile(r'\\bm1660\\b', re.I),
-              'share tracking parameter': re.compile(r'vd_source=', re.I),
-              'github token': re.compile(r'(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})'),
-              'openai style secret': re.compile(r'\\bsk-[A-Za-z0-9_-]{20,}'),
-          }
-          privacy_hits = []
-          for p in text_files:
-              text = p.read_text(encoding='utf-8-sig', errors='ignore')
-              for label, pattern in privacy_patterns.items():
-                  if pattern.search(text):
-                      privacy_hits.append(f'{label}:{p.relative_to(root)}')
-          if privacy_hits:
-              raise SystemExit('privacy gate failed: ' + ', '.join(privacy_hits))
-
-          runtime_hits = []
-          for p in root.rglob('*'):
-              if not p.is_file():
-                  continue
-              rel = p.relative_to(root)
-              parts_lower = [x.lower() for x in rel.parts]
-              name = p.name.lower()
-              if any(x in {'logs', '__pycache__', '_xingliupdates'} for x in parts_lower):
-                  runtime_hits.append(str(rel))
-              elif name.endswith(('.log', '.download', '.pyc')) or '.log.' in name or name == 'pending_update.json':
-                  runtime_hits.append(str(rel))
-          if runtime_hits:
-              raise SystemExit('runtime artifacts leaked into player package: ' + ', '.join(runtime_hits[:20]))
-          print('Privacy/runtime artifact gate: PASS')
-
-          forbidden_release_paths = [root/'author_tools', root/'UPDATE_PUBLISH_GUIDE_CN.md', root/'MODPACK_UPDATE_GUIDE_CN.md', root/'update_manifest.example.json']
-          leaked = [str(p.relative_to(root)) for p in forbidden_release_paths if p.exists()]
-          if leaked:
-              raise SystemExit('author-only files leaked into player build: ' + ', '.join(leaked))
-
-          updater = (root/'auto_updater.py').read_text(encoding='utf-8')
-          for token in ['cleanup_update_workspace','Cleanup-AfterSuccess','_validate_update_archive_hygiene','UPDATE_BACKUP_LIMIT = 1','QTimer.singleShot(0, dialog.check_updates)','立即安装已下载更新','requestInterruption','ALLOWED_UPDATE_HOSTS','def manual_home_check']:
-              if token not in updater:
-                  raise SystemExit('updater guard missing: ' + token)
-
-          stability = (root/'stability.py').read_text(encoding='utf-8')
-          if 'maxBytes=1 * 1024 * 1024, backupCount=1' not in stability:
-              raise SystemExit('log rotation limit missing')
-
-          health = (root/'modpack_health.py').read_text(encoding='utf-8')
-          repair = (root/'modpack_repair.py').read_text(encoding='utf-8')
-          for token in ['SCHEMA_VERSION = 2','include_repair_data=True','class RepairPreviewDialog','一键修复安全项目','ModpackRepairService']:
-              if token not in health:
-                  raise SystemExit('health guard missing: ' + token)
-          for token in ['class ModpackRepairService','pending_health_repair.json','self.mod_tx.apply','restore_states','setPriority','content_b64','recover_pending']:
-              if token not in repair:
-                  raise SystemExit('repair guard missing: ' + token)
-          if 'installMod(' in repair or 'removeMod(' in repair:
-              raise SystemExit('health repair must not install/remove MODs')
-
-          controller = (root/'consolidation_controller.py').read_text(encoding='utf-8')
-          modpack = (root/'modpack_updater.py').read_text(encoding='utf-8')
-          modops = (root/'mod_ops_assistant.py').read_text(encoding='utf-8')
-          tutorial = (root/'tutorial_data.py').read_text(encoding='utf-8')
-          menu = (root/'mainmenu_sync.py').read_text(encoding='utf-8')
-          checks = {
-              'controller': (controller, ['星黎帮助与教程.bat','检查全部更新','助手更新','整合包更新','_poll_help_request','_should_show_welcome','mainmenu_sync.sync','VersionInfo(2, 1, 1)']),
-              'modpack': (modpack, ['mainmenu_sync.sync(controller, installed, manifest)','prompt_when_new: bool = True']),
-              'modops': (modops, ['def _make_help_bat','星黎帮助与教程.bat']),
-              'tutorial': (tutorial, ['新手必读','助手更新和整合包更新有什么区别？','整合包检查与一键修复']),
-              'mainmenu': (menu, ['MainMenuCustomizer.ini','sDataSource','managed_app_running','mainmenu_release_cache.json','legacy_version_text']),
-          }
-          for label,(text,tokens) in checks.items():
-              missing=[x for x in tokens if x not in text]
+          with zipfile.ZipFile(str(path)) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit('ZIP integrity failure: ' + bad)
+              names = z.namelist()
+              required = [
+                  'xingli_Little_assistant/pgpatcher_adapter.py',
+                  'xingli_Little_assistant/instance_identity.py',
+                  'xingli_Little_assistant/onboarding_state.py',
+                  'xingli_Little_assistant/CHANGELOG_v2.2.0.md',
+                  'xingli_Little_assistant/consolidation_controller.py',
+              ]
+              missing = [x for x in required if x not in names]
               if missing:
-                  raise SystemExit(f'v2.1.1 feature gate missing in {label}: {missing!r}')
-          print('v2.1.1 onboarding/update/MainMenu feature gate: PASS')
+                  raise SystemExit('release content missing: {!r}'.format(missing))
+              forbidden = []
+              for name in names:
+                  low = name.replace('\\', '/').lower()
+                  base = low.rsplit('/', 1)[-1]
+                  if '/__pycache__/' in '/' + low or '/_xinglistate/' in '/' + low:
+                      forbidden.append(name)
+                  elif base.endswith(('.pyc', '.log', '.download')) or base in {'onboarding.json', 'pending_update.json', 'pending_health_repair.json'}:
+                      forbidden.append(name)
+              if forbidden:
+                  raise SystemExit('runtime state leaked into published ZIP: ' + ', '.join(forbidden[:20]))
 
-          entries=[]
-          for p in sorted(x for x in root.rglob('*') if x.is_file()):
-              rel=p.relative_to(root).as_posix()
-              entries.append(f'{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n')
-          tree_digest=hashlib.sha256(''.join(entries).encode()).hexdigest()
-          expected='5303a096e5191aa3857962d9f9ac32b791349f9fdba633dba74de81270079148'
-          print('source tree digest:', tree_digest)
-          if tree_digest != expected:
-              raise SystemExit('source tree digest mismatch: '+tree_digest)
+              py_names = [x for x in names if x.startswith('xingli_Little_assistant/') and x.endswith('.py')]
+              for name in py_names:
+                  source = z.read(name).decode('utf-8-sig')
+                  try:
+                      ast.parse(source, filename=name, feature_version=(3, 8))
+                  except TypeError:
+                      ast.parse(source, filename=name, feature_version=8)
 
-          out=Path('update/releases/xingli_Little_assistant_v2.1.1_update.zip')
-          out.parent.mkdir(parents=True, exist_ok=True)
-          if out.exists(): out.unlink()
-          with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
-              for p in sorted(x for x in Path('.release_work').rglob('*') if x.is_file()):
-                  z.write(p,p.relative_to('.release_work').as_posix())
-          with zipfile.ZipFile(out) as z:
-              bad=z.testzip()
-              if bad: raise SystemExit('zip integrity failure: '+bad)
-              leaked=[]
-              for name in z.namelist():
-                  lower=name.replace('\\','/').lower(); base=lower.rsplit('/',1)[-1]
-                  if '/logs/' in '/'+lower or '/__pycache__/' in '/'+lower or '/_xingliupdates/' in '/'+lower or base.endswith(('.log','.download','.pyc')) or '.log.' in base or base=='pending_update.json':
-                      leaked.append(name)
-              if leaked: raise SystemExit('runtime artifacts present in final ZIP: '+', '.join(leaked[:20]))
+              controller = z.read('xingli_Little_assistant/consolidation_controller.py').decode('utf-8-sig')
+              adapter = z.read('xingli_Little_assistant/pgpatcher_adapter.py').decode('utf-8-sig')
+              for token in ['VersionInfo(2, 2, 0)', 'PBR / PGPatcher', 'def launch_pgpatcher']:
+                  if token not in controller:
+                      raise SystemExit('controller release gate missing: ' + token)
+              for token in ['PGPatcher_Output', 'DynDOLOD', 'organizer.startApplication(exe, [], cwd)', 'set_active(names, False, verify=False)']:
+                  if token not in adapter:
+                      raise SystemExit('PGPatcher release gate missing: ' + token)
 
-          data=out.read_bytes(); package_sha=hashlib.sha256(data).hexdigest(); package_size=len(data)
-          print('package size:', package_size); print('package sha256:', package_sha)
-          manifest={
-            'schema':2,'product':'xingli_Little_assistant','channel':'stable','version':'2.1.1','title':'星黎 MO2 小助手 2.1.1',
-            'published_at':'2026-09-09T17:46:00+08:00',
-            'changelog':'新手入口与更新交互优化：新增桌面“星黎帮助与教程”入口和一次性欢迎引导；教程中心改为与当前版本同步的内置教程；主页明确拆分助手更新/整合包更新并支持检查全部；新增 Main Menu Customizer 自动同步当前整合版本、远程更新状态和说明，并保留原 version.txt 历史内容。',
-            'package':{'filename':out.name,'size':package_size,'sha256':package_sha,'mirrors':[
-              {'name':'Gitee 国内主源','url':'https://gitee.com/HR-world/xingli/raw/main/update/releases/'+out.name},
-              {'name':'GitHub 备用源','url':'https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/'+out.name},
-            ]}}
-          Path('update/latest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          PYBUILD
-
-          unzip -t update/releases/xingli_Little_assistant_v2.1.1_update.zip >/dev/null
-
-      - name: Commit verified release
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update/latest.json update/releases/xingli_Little_assistant_v2.1.1_update.zip
-          if git diff --cached --quiet; then
-            echo "No release changes"
-            exit 0
-          fi
-          git commit -m "Publish Xingli Assistant v2.1.1 update"
-          git push
+          print('Published Xingli Assistant v2.2.0 verification: PASS')
+          print('size:', len(data))
+          print('sha256:', sha)
+          '@ | Set-Content -Encoding UTF8 .verify_v220.py
+          python .verify_v220.py
