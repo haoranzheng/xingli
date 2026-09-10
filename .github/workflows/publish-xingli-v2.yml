@@ -63,6 +63,7 @@ jobs:
                   'xingli_Little_assistant/CHANGELOG_v2.2.0.md',
                   'xingli_Little_assistant/consolidation_controller.py',
                   'xingli_Little_assistant/tutorial_data.py',
+                  'xingli_Little_assistant/auto_updater.py',
               ]
               missing = [x for x in required if x not in names]
               if missing:
@@ -90,6 +91,7 @@ jobs:
               adapter = z.read('xingli_Little_assistant/pgpatcher_adapter.py').decode('utf-8-sig')
               tutorial = z.read('xingli_Little_assistant/tutorial_data.py').decode('utf-8-sig')
               changelog = z.read('xingli_Little_assistant/CHANGELOG_v2.2.0.md').decode('utf-8-sig')
+              updater = z.read('xingli_Little_assistant/auto_updater.py').decode('utf-8-sig')
               for token in ['VersionInfo(2, 2, 0)', 'PBR / PGPatcher', 'def launch_pgpatcher', 'Backported Extended ESL Support (BEES)']:
                   if token not in controller:
                       raise SystemExit('controller release gate missing: ' + token)
@@ -98,6 +100,22 @@ jobs:
                       raise SystemExit('PGPatcher release gate missing: ' + token)
               if 'Backported Extended ESL Support (BEES)' not in tutorial or 'Backported Extended ESL Support (BEES)' not in changelog:
                   raise SystemExit('BEES release guidance missing from tutorial/changelog')
+
+              block_start = updater.index('            # Strict shutdown order:')
+              block_end = updater.index('        except Exception as exc:', block_start)
+              block = updater[block_start:block_end]
+              order = [
+                  'self.close()',
+                  'main_window.close()',
+                  'QtWidgets.QApplication.processEvents()',
+                  'os.startfile(installer)',
+                  'QTimer.singleShot(350, _request_graceful_mo2_shutdown)',
+              ]
+              positions = [block.index(token) for token in order]
+              if positions != sorted(positions):
+                  raise SystemExit('Xingli-before-MO2 shutdown order mismatch')
+              if '先关闭星黎小助手窗口，再请求 MO2 正常关闭' not in updater:
+                  raise SystemExit('ordered shutdown user guidance missing')
 
           print('Published Xingli Assistant v2.2.0 verification: PASS')
           print('size:', len(data))
