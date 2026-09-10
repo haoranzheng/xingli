@@ -2,22 +2,22 @@
   "schema": 2,
   "product": "xingli_Little_assistant",
   "channel": "stable",
-  "version": "2.1.1",
-  "title": "星黎 MO2 小助手 2.1.1",
-  "published_at": "2026-09-09T17:46:00+08:00",
-  "changelog": "新手入口与更新交互优化：新增桌面“星黎帮助与教程”入口和一次性欢迎引导；教程中心改为与当前版本同步的内置教程；主页明确拆分助手更新/整合包更新并支持检查全部；新增 Main Menu Customizer 自动同步当前整合版本、远程更新状态和说明，并保留原 version.txt 历史内容。",
+  "version": "2.2.0",
+  "title": "星黎 MO2 小助手 2.2.0",
+  "published_at": "2026-09-10T15:57:00+08:00",
+  "changelog": "2.2.0：修复整合包重新解压后的真实首次启动状态；新增 PGPatcher / TruePBR 适配，可自动发现 PGPatcher、通过当前 MO2 VFS 启动、检查并安全禁用旧 PGPatcher 输出、阻止 DynDOLOD 输出状态冲突，并补充正确的 PBR 生成顺序与内置教程；Skyrim 1.5.97–1.6.659 会明确提示 PGPatcher 官方要求 Backported Extended ESL Support (BEES)；优化助手自更新退出顺序，先关闭星黎小助手界面，再请求 MO2 正常关闭，随后执行更新替换。",
   "package": {
-    "filename": "xingli_Little_assistant_v2.1.1_update.zip",
-    "size": 222551,
-    "sha256": "6566e0f9d04e29b0f468ff09f4b60c24c50e9817002a6a0a800d96d70e205750",
+    "filename": "xingli_Little_assistant_v2.2.0_update.zip",
+    "size": 230846,
+    "sha256": "17381c56b9bfde6bcefe017d5e696bc5f36e16f0ed6861dac08d53a0f269d9d7",
     "mirrors": [
       {
         "name": "Gitee 国内主源",
-        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.1.1_update.zip"
+        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.2.0_update.zip"
       },
       {
         "name": "GitHub 备用源",
-        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.1.1_update.zip"
+        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.2.0_update.zip"
       }
     ]
   }

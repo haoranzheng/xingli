@@ -1,0 +1,71 @@
+name: Build Xingli v2.2.0 release candidate
+
+on:
+  push:
+    branches: [feature/2.2-clean-first-run]
+    paths:
+      - 'release_build/v2.2.0/**'
+      - '.github/workflows/build-v2.2-clean-first-run.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and validate v2.2.0 release candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python release_build/v2.2.0/validate_release_candidate.py
+
+      - name: Apply Skyrim 1.5.97 BEES requirement guidance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python release_build/v2.2.0/apply_bees_requirement.py
+
+      - name: Enforce Xingli-before-MO2 update shutdown order
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python release_build/v2.2.0/apply_update_shutdown_order.py
+
+      - name: Prepare stable release files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python release_build/v2.2.0/prepare_stable_release.py
+
+      - name: Upload validated release
+        uses: actions/upload-artifact@v4
+        with:
+          name: xingli-v2.2.0-release
+          path: |
+            .work/xingli_Little_assistant_v2.2.0_candidate.zip
+            .work/candidate-manifest.json
+            .work/phase-a-test-report.txt
+            update/releases/xingli_Little_assistant_v2.2.0_update.zip
+            update/latest.json
+          if-no-files-found: error
+
+      - name: Stage verified release on branch
+        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.2.0_update.zip
+          if (git diff --cached --quiet) {
+            Write-Host "Release assets already staged"
+            exit 0
+          }
+          git commit -m "Stage Xingli Assistant v2.2.0 release"
+          git push
