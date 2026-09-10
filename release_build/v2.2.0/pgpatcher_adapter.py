@@ -8,6 +8,7 @@ recommended PGPatcher -> TexGen -> DynDOLOD generation order.
 """
 
 import os
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .mod_state_service import ModStateService
@@ -130,7 +131,7 @@ def recommended_output_path(organizer) -> str:
         mods = ""
     if not mods:
         return RECOMMENDED_OUTPUT_NAME
-    return os.path.abspath(os.path.join(mods, RECOMMENDED_OUTPUT_NAME))
+    return str((Path(mods) / RECOMMENDED_OUTPUT_NAME).resolve())
 
 
 def mo2_instance_path(organizer) -> str:
