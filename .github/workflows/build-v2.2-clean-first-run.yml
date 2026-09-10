@@ -25,6 +25,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           python release_build/v2.2.0/validate_release_candidate.py
 
+      - name: Apply Skyrim 1.5.97 BEES requirement guidance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python release_build/v2.2.0/apply_bees_requirement.py
+
       - name: Prepare stable release files
         shell: pwsh
         run: |
