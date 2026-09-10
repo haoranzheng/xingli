@@ -8,3 +8,4 @@
 - 显示推荐 MO2 Instance / PGPatcher_Output 路径，并提示 TruePBR + Community Shaders 与 BodySlide → PGPatcher → TexGen → DynDOLOD 顺序。
 - 对 Skyrim 1.5.97–1.6.659 明确提示 PGPatcher 官方要求 Backported Extended ESL Support (BEES)。
 - 用户助手自检与内置教程新增 PGPatcher / TruePBR 检查和说明。
+- 优化助手自更新退出顺序：先关闭星黎小助手界面，再请求 MO2 正常关闭，随后执行更新替换。
