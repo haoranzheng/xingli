@@ -3,5 +3,81 @@
   "product": "xingli_sort_updates",
   "pack_id": "xingli-skyrim",
   "channel": "stable",
-  "releases": []
+  "releases": [
+    {
+      "id": "xingli-modlist-20261014-r01",
+      "version": "1.0.0",
+      "kind": "mods",
+      "title": "星黎左侧 MOD 排序 v1.0.0",
+      "changelog": "官方排序文件更新：下载保存为当前 Profile 的新增备份；不会直接改变现有排序。",
+      "files": {
+        "modlist.txt": {
+          "size": 97325,
+          "sha256": "26101b94d5b413b0e13d81764e9b531ca42db7ae658e121ce023288ba97d0136",
+          "mirrors": [
+            {
+              "name": "Gitee 国内主源",
+              "url": "https://gitee.com/HR-world/xingli/raw/main/sort/releases/xingli-modlist-20261014-r01/v1.0.0/modlist.txt"
+            },
+            {
+              "name": "GitHub 备用源",
+              "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/sort/releases/xingli-modlist-20261014-r01/v1.0.0/modlist.txt"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "xingli-plugins-20261014-r01",
+      "version": "1.0.0",
+      "kind": "plugins",
+      "title": "星黎右侧插件排序 v1.0.0",
+      "changelog": "官方排序文件更新：下载保存为当前 Profile 的新增备份；不会直接改变现有排序。",
+      "files": {
+        "plugins.txt": {
+          "size": 68941,
+          "sha256": "14ca39f7e8b188dea626624ae188e18b33ebd55b59a3f220459b00c79c87b11a",
+          "mirrors": [
+            {
+              "name": "Gitee 国内主源",
+              "url": "https://gitee.com/HR-world/xingli/raw/main/sort/releases/xingli-plugins-20261014-r01/v1.0.0/plugins.txt"
+            },
+            {
+              "name": "GitHub 备用源",
+              "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/sort/releases/xingli-plugins-20261014-r01/v1.0.0/plugins.txt"
+            }
+          ]
+        },
+        "loadorder.txt": {
+          "size": 69087,
+          "sha256": "a1d6485d3497d9b8263d053767f01fc9748260f288068eb898d439d8ed59a4a6",
+          "mirrors": [
+            {
+              "name": "Gitee 国内主源",
+              "url": "https://gitee.com/HR-world/xingli/raw/main/sort/releases/xingli-plugins-20261014-r01/v1.0.0/loadorder.txt"
+            },
+            {
+              "name": "GitHub 备用源",
+              "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/sort/releases/xingli-plugins-20261014-r01/v1.0.0/loadorder.txt"
+            }
+          ]
+        },
+        "lockedorder.txt": {
+          "size": 59,
+          "sha256": "9962fbb07e4c40c4c39b6fe7cedf3f1527cdda5ad0a60d7d53a872b5ae52812d",
+          "mirrors": [
+            {
+              "name": "Gitee 国内主源",
+              "url": "https://gitee.com/HR-world/xingli/raw/main/sort/releases/xingli-plugins-20261014-r01/v1.0.0/lockedorder.txt"
+            },
+            {
+              "name": "GitHub 备用源",
+              "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/sort/releases/xingli-plugins-20261014-r01/v1.0.0/lockedorder.txt"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "published_at": "2026-10-14T07:34:29+00:00"
 }
