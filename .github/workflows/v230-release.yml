@@ -1,0 +1,107 @@
+name: Build and publish Xingli v2.3.0 (mirror ZIP)
+on:
+  push:
+    branches: [feature/startup-update-rollback-v23]
+    paths:
+      - '.github/workflows/v230-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-validate-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Build v2.3.0 plugin ZIP and matching update manifest
+        shell: pwsh
+        run: |
+          python development/v2.3.0/build_release.py
+      - name: Verify ZIP and embedded generated PowerShell syntax
+        shell: pwsh
+        run: |
+          @'
+          import ast, hashlib, json, pathlib, zipfile, re
+          root=pathlib.Path('.')
+          manifest=json.loads((root/'update/latest.json').read_text(encoding='utf-8-sig'))
+          package=manifest['package']
+          p=root/'update/releases'/package['filename']
+          assert manifest['version']=='2.3.0'
+          assert len(p.read_bytes())==package['size']
+          assert hashlib.sha256(p.read_bytes()).hexdigest()==package['sha256']
+          assert package['mirrors'][0]['url'].startswith('https://gitee.com/')
+          with zipfile.ZipFile(p) as z:
+            assert z.testzip() is None
+            names=z.namelist()
+            assert 'xingli_Little_assistant/auto_updater.py' in names
+            assert 'xingli_Little_assistant/CHANGELOG_v2.3.0.md' in names
+            for name in names:
+              if name.endswith('.py'):
+                ast.parse(z.read(name).decode('utf-8-sig'),feature_version=(3,8))
+            updater=z.read('xingli_Little_assistant/auto_updater.py').decode('utf-8')
+            controller=z.read('xingli_Little_assistant/consolidation_controller.py').decode('utf-8')
+            assert 'def _prompt_startup_update' in updater
+            assert 'QTimer.singleShot(2600, lambda: auto_updater.maybe_auto_check(self))' in controller
+            assert 'mark_startup_healthy(self)' in controller
+            assert 'MO2' in updater
+            assert 'startup_health_' in updater
+            assert '2.3.0' in z.read('xingli_Little_assistant/version.ini').decode('utf-8')
+            tree=ast.parse(updater)
+            template=None
+            for node in ast.walk(tree):
+              if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='ps1' for t in node.targets):
+                if isinstance(node.value,ast.Call) and isinstance(node.value.func,ast.Attribute) and isinstance(node.value.func.value,ast.Constant):
+                  template=node.value.func.value.value
+                elif isinstance(node.value,ast.Constant):
+                  template=node.value.value
+            assert template and '$ErrorActionPreference' in template
+            fields=['plugin_dir','source_dir','mo2_exe','backup_root','result_path','version','auto_close_flag','package_path','stage_dir','pending_path','update_root','log_dir','fallback_log_dir']
+            values={x:"'C:\\Temp\\Xingli'" for x in fields}
+            pathlib.Path('ci_v230_installer.ps1').write_text(template.format(**values),encoding='utf-8')
+          print('ZIP + SHA + Python AST + updater hooks: PASS')
+          '@ | Set-Content -Encoding UTF8 ci_v230_validate.py
+          python ci_v230_validate.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-Location) 'ci_v230_installer.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "Generated PowerShell installer syntax: PASS"
+      - name: Publish only validated ZIP and latest.json to main
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/xingli230" -Force | Out-Null
+          Copy-Item update/releases/xingli_Little_assistant_v2.3.0_update.zip "$env:RUNNER_TEMP/xingli230/package.zip"
+          Copy-Item update/latest.json "$env:RUNNER_TEMP/xingli230/latest.json"
+          git fetch origin main
+          git checkout -B publish-v230 origin/main
+          @'
+          import json
+          from pathlib import Path
+          current=json.loads(Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if current.get('version') not in ('2.2.0','2.3.0'):
+            raise SystemExit('Unexpected main stable version: '+str(current.get('version')))
+          '@ | Set-Content -Encoding UTF8 ci_v230_main_guard.py
+          python ci_v230_main_guard.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$env:RUNNER_TEMP/xingli230/package.zip" update/releases/xingli_Little_assistant_v2.3.0_update.zip
+          Copy-Item "$env:RUNNER_TEMP/xingli230/latest.json" update/latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.3.0_update.zip
+          if (git diff --cached --quiet) {
+            Write-Host 'Release already published'
+            exit 0
+          }
+          git commit -m "Release Xingli Assistant v2.3.0 (startup prompt, update rollback)"
+          git push origin HEAD:main
