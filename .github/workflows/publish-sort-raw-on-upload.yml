@@ -1,0 +1,62 @@
+name: Publish native MO2 sorting TXT catalog (no ZIP)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sort/releases/**/*.txt'
+      - 'sort/releases/**/v*/**/*.txt'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  refresh-sort-manifest:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Build SHA256 manifest only for complete sorting file sets
+        shell: pwsh
+        run: |
+          python development/v2.4.2/publish_raw_sort.py --write
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate all sort catalog records before publication
+        shell: pwsh
+        run: |
+          @'
+          import json,importlib.util,pathlib
+          root=pathlib.Path('.')
+          path=root/'development/v2.4.2/sort_update_core.py'
+          spec=importlib.util.spec_from_file_location('core',path)
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          data=json.loads((root/'sort/latest.json').read_text(encoding='utf-8-sig'))
+          releases=mod.validate_manifest(data)
+          for rec in releases:
+            if 'files' not in rec: continue
+            for name,descriptor in rec['files'].items():
+              found=root/'sort/releases'/rec['id']/('v'+rec['version'])/name
+              if not found.is_file():
+                raise SystemExit('Published source missing: '+str(found))
+              import hashlib
+              blob=found.read_bytes()
+              assert len(blob)==descriptor['size']
+              assert hashlib.sha256(blob).hexdigest()==descriptor['sha256']
+          print('NATIVE_MO2_SORT_CATALOG_VALID',len(releases))
+          '@ | Set-Content -LiteralPath check_sort_catalog.py -Encoding UTF8
+          python check_sort_catalog.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit only if complete valid new sort release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sort/latest.json
+          if (git diff --cached --quiet) {
+            Write-Host 'No complete new sorting file group; catalog unchanged'
+            exit 0
+          }
+          git commit -m "Publish validated direct TXT MO2 sorting updates"
+          git push origin HEAD:main
