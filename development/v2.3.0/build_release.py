@@ -27,7 +27,7 @@ def replace_once(source, old, new, label):
     return source.replace(old, new, 1)
 
 def modify_controller(data):
-    s=data.decode("utf-8-sig")
+    s=data.decode("utf-8-sig").replace("\r\n", "\n")
     s=replace_once(s,'DEFAULT_VERSION = "2.2.0"','DEFAULT_VERSION = "2.3.0"',"default version")
     s=replace_once(s,'version() 返回版本 2.2.0-user','version() 返回版本 2.3.0-user',"diagnostic version")
     s=replace_once(s,'return mobase.VersionInfo(2, 2, 0)','return mobase.VersionInfo(2, 3, 0)',"MO2 version")
