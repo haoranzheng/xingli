@@ -1,0 +1,105 @@
+name: Publish Xingli v2.3.1 notification test to mirrors
+on:
+  push:
+    branches:
+      - test/v2.3.1-update-push
+    paths:
+      - '.github/workflows/publish-v231-notification-test.yml'
+      - 'development/v2.3.1/build_test_release.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Build version-only v2.3.1 test package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python development/v2.3.1/build_test_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate package, manifest and unchanged runtime behavior
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import ast, hashlib, json, pathlib, zipfile
+          root=pathlib.Path('.')
+          manifest=json.loads((root/'update/latest.json').read_text(encoding='utf-8-sig'))
+          pkg=manifest['package']
+          path=root/'update/releases'/pkg['filename']
+          assert manifest['version']=='2.3.1'
+          assert manifest['product']=='xingli_Little_assistant'
+          assert manifest['channel']=='stable'
+          data=path.read_bytes()
+          assert len(data)==pkg['size']
+          assert hashlib.sha256(data).hexdigest()==pkg['sha256']
+          assert pkg['mirrors'][0]['url'].startswith('https://gitee.com/')
+          assert pkg['mirrors'][1]['url'].startswith('https://raw.githubusercontent.com/')
+          old=root/'update/releases/xingli_Little_assistant_v2.3.0_update.zip'
+          with zipfile.ZipFile(old) as a, zipfile.ZipFile(path) as b:
+            assert a.testzip() is None and b.testzip() is None
+            before={i.filename:a.read(i) for i in a.infolist() if not i.is_dir()}
+            after={i.filename:b.read(i) for i in b.infolist() if not i.is_dir()}
+            changed={name for name in before if before[name]!=after[name]}
+            allowed={'xingli_Little_assistant/consolidation_controller.py','xingli_Little_assistant/version.ini'}
+            assert changed==allowed, changed
+            added=set(after)-set(before)
+            assert added=={'xingli_Little_assistant/CHANGELOG_v2.3.1.md'}, added
+            for name in after:
+              if name.endswith('.py'):
+                ast.parse(after[name].decode('utf-8-sig'),filename=name,feature_version=(3,8))
+            controller=after['xingli_Little_assistant/consolidation_controller.py'].decode('utf-8-sig')
+            updater=after['xingli_Little_assistant/auto_updater.py'].decode('utf-8-sig')
+            assert 'mobase.VersionInfo(2, 3, 1)' in controller
+            assert 'DEFAULT_VERSION = "2.3.1"' in controller
+            assert 'def _prompt_startup_update' in updater
+            assert 'QTimer.singleShot(2600, lambda: auto_updater.maybe_auto_check(self))' in controller
+            assert 'mark_startup_healthy(self)' in controller
+            assert '2.3.1' in after['xingli_Little_assistant/version.ini'].decode('utf-8')
+          print('PACKAGE_MANIFEST_AND_UNCHANGED_RUNTIME_PASS')
+          print('SHA256',pkg['sha256'])
+          '@ | Set-Content -LiteralPath ci_v231_validate.py -Encoding UTF8
+          python ci_v231_validate.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publish validated ZIP and latest.json to main
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/xingli231" -Force | Out-Null
+          Copy-Item update/releases/xingli_Little_assistant_v2.3.1_update.zip "$env:RUNNER_TEMP/xingli231/package.zip"
+          Copy-Item update/latest.json "$env:RUNNER_TEMP/xingli231/latest.json"
+          git fetch origin main
+          git checkout -B publish-v231 origin/main
+          @'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if data.get('version') not in ('2.3.0', '2.3.1'):
+              raise SystemExit('Unexpected current main version: '+str(data.get('version')))
+          '@ | Set-Content -LiteralPath ci_v231_guard.py -Encoding UTF8
+          python ci_v231_guard.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$env:RUNNER_TEMP/xingli231/package.zip" update/releases/xingli_Little_assistant_v2.3.1_update.zip
+          Copy-Item "$env:RUNNER_TEMP/xingli231/latest.json" update/latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.3.1_update.zip
+          if (git diff --cached --quiet) {
+            Write-Host 'v2.3.1 already published'
+            exit 0
+          }
+          git commit -m "Release Xingli Assistant v2.3.1 notification test"
+          git push origin HEAD:main
