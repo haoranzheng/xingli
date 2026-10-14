@@ -163,11 +163,21 @@ def fetch_catalog(sources):
     raise UpdateError("all MOD catalog mirrors unavailable: " + "; ".join(errors))
 
 
+def _special_mod(mod):
+    if mod is None:
+        return True
+    for key in ("isSeparator", "isOverwrite", "isForeign"):
+        method = getattr(mod, key, None)
+        if callable(method) and method():
+            return True
+    return False
+
+
 def installed_version(organizer, mod_name):
     """Unknown local versions are deliberately NOT silently upgraded."""
     try:
         mod = organizer.modList().getMod(mod_name)
-        if mod is None or mod.isSeparator() or mod.isOverwrite() or mod.isForeign():
+        if _special_mod(mod):
             return None
         value = mod.version()
         for attr in ("canonicalString", "displayString"):
@@ -323,7 +333,7 @@ def backup_mod(organizer, mod_name, backup_root, mod_id):
     """
     mod_list = organizer.modList()
     mod = mod_list.getMod(mod_name)
-    if mod is None or mod.isSeparator() or mod.isOverwrite() or mod.isForeign():
+    if _special_mod(mod):
         raise UpdateError("MOD is not an ordinary managed MO2 mod")
     source = Path(str(mod.absolutePath())).resolve()
     mods_root = Path(str(organizer.modsPath())).resolve()
