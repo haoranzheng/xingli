@@ -127,13 +127,13 @@ def fetch_releases(timeout=8):
 
 
 def _check_text(name, content):
-    if len(content) == 0 or len(content)>MAX_TEXT or b"\0" in content:
+    if (len(content) == 0 and name != "lockedorder.txt") or len(content)>MAX_TEXT or b"\0" in content:
         raise SortError(name + " 非有效排序文本")
     try:
         text = content.decode("utf-8-sig")
     except UnicodeError:
         raise SortError(name + " 必须使用 UTF-8")
-    if not text.strip():
+    if not text.strip() and name != "lockedorder.txt":
         raise SortError(name + " 内容为空")
     # Do not reorder modlist: MO2's priority order is REVERSED on disk.
     if name=="modlist.txt":
