@@ -229,11 +229,12 @@ def install_as_backups(profile, files, kind, clock=None):
         opened=[]
         try:
             for target in destinations:
-                fd=os.open(str(target),os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_BINARY if hasattr(os,"O_BINARY") else os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+                flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os,"O_BINARY",0)
+                fd=os.open(str(target),flags,0o600)
                 opened.append((target,fd))
             for target,fd in opened:
                 with os.fdopen(fd,"wb") as f:
-                    f.write(files[target.name.split(".",1)[0]+".txt"] if False else files[_original_name(target,suffix)])
+                    f.write(files[_original_name(target,suffix)])
                     f.flush()
                     os.fsync(f.fileno())
             return {"suffix":suffix,"paths":[str(p) for p in destinations]}
@@ -287,7 +288,7 @@ def save_receipt(path, release):
     data=read_receipts(path)
     data[release["id"]]=release["version"]
     temp=path.with_suffix(".json.tmp")
-    with temp.open("x",encoding="utf-8") as f:
+    with temp.open("w",encoding="utf-8") as f:
         json.dump(data,f,ensure_ascii=False,indent=2)
         f.flush()
         os.fsync(f.fileno())
