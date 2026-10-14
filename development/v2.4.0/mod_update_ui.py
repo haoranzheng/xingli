@@ -114,7 +114,6 @@ def maybe_auto_check(controller):
     controller._xingli_mod_update_check_thread = thread
 
     def completed(records):
-        controller._xingli_mod_update_check_thread = None
         try:
             updates = core.eligible_updates(controller.organizer, records)
             if not updates:
@@ -128,11 +127,11 @@ def maybe_auto_check(controller):
             logger.exception("Cannot process MOD update results")
 
     def failed(message):
-        controller._xingli_mod_update_check_thread = None
         logger.warning("MOD updates unavailable: %s", message)
 
     thread.ready.connect(completed)
     thread.failure.connect(failed)
+    thread.finished.connect(lambda: setattr(controller, "_xingli_mod_update_check_thread", None))
     thread.start()
 
 
@@ -224,7 +223,6 @@ class ModUpdateDialog(QtWidgets.QDialog):
         self.catalog_thread = CatalogThread(self.sources, self)
 
         def ready(records):
-            self.catalog_thread = None
             self.check_button.setEnabled(True)
             try:
                 self.records = core.eligible_updates(self.controller.organizer, records)
@@ -233,12 +231,12 @@ class ModUpdateDialog(QtWidgets.QDialog):
                 self.status.setText("检查失败：" + str(exc))
 
         def failed(error):
-            self.catalog_thread = None
             self.check_button.setEnabled(True)
             self.status.setText("连接 MOD 更新目录失败：" + str(error))
 
         self.catalog_thread.ready.connect(ready)
         self.catalog_thread.failure.connect(failed)
+        self.catalog_thread.finished.connect(lambda: setattr(self, "catalog_thread", None))
         self.catalog_thread.start()
 
     def download_selected(self):
@@ -275,16 +273,19 @@ class ModUpdateDialog(QtWidgets.QDialog):
         thread.progress_changed.connect(progress.setValue)
         progress.canceled.connect(thread.cancel)
 
-        def ready(path):
-            self._finish_download()
-            self._install_via_mo2(path)
+        self._download_result = None
+        self._download_error = None
+        thread.ready.connect(lambda path: setattr(self, "_download_result", path))
+        thread.failure.connect(lambda error: setattr(self, "_download_error", error))
 
-        def failed(error):
+        def on_finished():
             self._finish_download()
-            QtWidgets.QMessageBox.warning(self, "下载失败", error)
+            if self._download_error:
+                QtWidgets.QMessageBox.warning(self, "下载失败", self._download_error)
+            elif self._download_result:
+                self._install_via_mo2(self._download_result)
 
-        thread.ready.connect(ready)
-        thread.failure.connect(failed)
+        thread.finished.connect(on_finished)
         thread.start()
 
     def _finish_download(self):
@@ -293,6 +294,14 @@ class ModUpdateDialog(QtWidgets.QDialog):
             self.progress_dialog = None
         self.download_thread = None
         self.install_button.setEnabled(bool(self.records))
+
+    def closeEvent(self, event):
+        if ((self.catalog_thread and self.catalog_thread.isRunning()) or
+                (self.download_thread and self.download_thread.isRunning())):
+            event.ignore()
+            self.status.setText("检查或下载尚未完成；请稍候或在下载进度窗口取消。")
+            return
+        super().closeEvent(event)
 
     def _install_via_mo2(self, archive):
         record = self.download_record
