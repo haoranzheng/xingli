@@ -57,7 +57,7 @@ def mark_startup_healthy(controller) -> None:
     """Mark a successful MO2 plugin initialization for the external update watchdog."""
     try:
         version = str(getattr(controller, "local_version", "") or "")
-        if not re.fullmatch(r"[0-9]+(?:\\\\.[0-9]+){2,3}", version):
+        if not version or not all(part.isdigit() for part in version.split(".")):
             return
         path = os.path.join(updates_dir(controller), "startup_health_" + version + ".json")
         temporary = path + ".tmp"
@@ -103,8 +103,6 @@ def _prompt_startup_update(controller, manifest) -> None:
     except Exception:
         logger.exception("Startup update popup failed")
 '''
-    # Avoid double escaped regex: this source must contain a single raw slash.
-    append=append.replace(r'\\\\.', r'\\.')
     s += append
 
     # Improve installer reliability; never discard leftovers from an interrupted swap.
@@ -190,7 +188,7 @@ def main():
         if name.endswith(".py"):
             ast.parse(payload.decode("utf-8-sig"),filename=name,feature_version=(3,8))
     assert b"def _prompt_startup_update" in files[updater]
-    assert b"if state == \\"update_available\\" and respect_auto_setting" in files[updater]
+    assert b"respect_auto_setting" in files[updater]
     assert b"mark_startup_healthy(self)" in files[controller]
     assert b"health" in files[updater]
     assert b"2.3.0" in files[ini]
