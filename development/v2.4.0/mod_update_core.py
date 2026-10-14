@@ -62,6 +62,20 @@ def validate_catalog(payload, allowed_hosts):
     items = payload.get("mods")
     if not isinstance(items, list) or len(items) > 500:
         raise UpdateError("invalid MOD catalog list")
+    # R2 public hostnames are declared by the trusted official catalog.
+    # This lets the author switch the bucket domain without updating the plugin.
+    publisher_hosts = payload.get("download_hosts", [])
+    if not isinstance(publisher_hosts, list) or len(publisher_hosts) > 12:
+        raise UpdateError("invalid published download host list")
+    catalog_hosts = set(allowed_hosts)
+    for domain in publisher_hosts:
+        if (not isinstance(domain, str) or
+                not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{2,250})[a-z0-9]", domain) or
+                domain.startswith((".", "-")) or ".." in domain or
+                domain in ("localhost", "127.0.0.1") or
+                domain.endswith((".local", ".internal", ".r2.dev"))):
+            raise UpdateError("invalid R2 public download domain")
+        catalog_hosts.add(domain)
     result = []
     seen = set()
     for raw in items:
@@ -93,10 +107,11 @@ def validate_catalog(payload, allowed_hosts):
             if not isinstance(mirror, dict):
                 raise UpdateError("invalid MOD mirror")
             link = str(mirror.get("url", ""))
-            _host(link, allowed_hosts)
+            _host(link, catalog_hosts)
             validated.append({"url": link, "name": str(mirror.get("name", ""))[:70]})
         result.append({
             "id": modid,
+            "_trusted_hosts": sorted(catalog_hosts),
             "mo2_name": name,
             "version": version,
             "changelog": str(raw.get("changelog", ""))[:2000],
@@ -267,6 +282,7 @@ def download_verified(record, cache_dir, allowed_hosts, timeout=20, progress=Non
     if final.exists():
         final.unlink()
     failures = []
+    allowed_hosts = set(allowed_hosts) | set(record.get("_trusted_hosts", []))
     for mirror in package["mirrors"]:
         url = mirror["url"]
         try:
