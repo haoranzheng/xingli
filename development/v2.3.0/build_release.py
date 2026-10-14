@@ -174,15 +174,15 @@ def main():
     assert controller in files and updater in files and ini in files
     files[controller]=modify_controller(files[controller])
     files[updater]=modify_updater(files[updater])
-    files[ini]=b"[Version]\\nlocal = 2.3.0\\n"
+    files[ini]=b"[Version]\nlocal = 2.3.0\n"
     files[PREFIX+"CHANGELOG_v2.3.0.md"]=(""
-        "# v2.3.0 — 启动更新提示及自动回滚\\n\\n"
-        "- MO2 启动时自动检查国内镜像源，发现新版本即弹窗；无需打开星黎小助手。\\n"
-        "- 更新弹窗支持查看更新、稍后提醒；安装仍需用户明确确认。\\n"
-        "- 继续使用 Gitee 主源、GitHub Raw 备用源和 SHA256 校验；不使用 GitHub Releases。\\n"
-        "- 安装器保护意外遗留的中间目录，保留旧版备份。\\n"
-        "- 自 v2.3.0 发起的后续更新会监测 MO2 启动健康标记，若未就绪，尝试正常关闭并自动恢复旧版。\\n"
-        "- 从 v2.2.0 升级到本版仍由 v2.2.0 安装器负责执行，无法追溯增加其启动健康监测。\\n"
+        "# v2.3.0 — 启动更新提示及自动回滚\n\n"
+        "- MO2 启动时自动检查国内镜像源，发现新版本即弹窗；无需打开星黎小助手。\n"
+        "- 更新弹窗支持查看更新、稍后提醒；安装仍需用户明确确认。\n"
+        "- 继续使用 Gitee 主源、GitHub Raw 备用源和 SHA256 校验；不使用 GitHub Releases。\n"
+        "- 安装器保护意外遗留的中间目录，保留旧版备份。\n"
+        "- 自 v2.3.0 发起的后续更新会监测 MO2 启动健康标记，若未就绪，尝试正常关闭并自动恢复旧版。\n"
+        "- 从 v2.2.0 升级到本版仍由 v2.2.0 安装器负责执行，无法追溯增加其启动健康监测。\n"
     ).encode("utf-8")
     for name,payload in files.items():
         if name.endswith(".py"):
@@ -214,7 +214,7 @@ def main():
                        {"name":"Gitee 国内主源","url":"https://gitee.com/HR-world/xingli/raw/main/update/releases/"+filename},
                        {"name":"GitHub 备用源","url":"https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/"+filename}
                    ])
-    MANIFEST.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+    MANIFEST.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     print("BUILD_230_PASS",len(files),"files",len(data),"bytes",package["sha256"])
     print("Autocheck startup + popup + future installer rollback: VERIFIED STATIC")
 if __name__=="__main__":
