@@ -39,7 +39,7 @@ def modify_controller(data):
     return s.encode("utf-8")
 
 def modify_updater(data):
-    s=data.decode("utf-8-sig")
+    s=data.decode("utf-8-sig").replace("\r\n", "\n")
     # The 2.2.0 checker already runs at MO2 startup. Notify users only when newer.
     anchor='''                _publish_home_status(controller, state, latest=latest, source=source)'''
     insert='''                _publish_home_status(controller, state, latest=latest, source=source)
