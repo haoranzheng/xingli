@@ -4,6 +4,7 @@ on:
     branches: [feature/startup-update-rollback-v23]
     paths:
       - '.github/workflows/v230-release.yml'
+      - 'development/v2.3.0/build_release.py'
   workflow_dispatch:
 
 permissions:
