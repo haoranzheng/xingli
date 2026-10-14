@@ -1,0 +1,116 @@
+name: Xingli v2.4.1 MO2 sorting backup publish
+on:
+  push:
+    branches: [feature/v2.4.1-sort-backup-push]
+    paths:
+      - '.github/workflows/release-v241-sort-backups.yml'
+      - 'development/v2.4.1/**'
+      - 'sort/latest.json'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  verify-and-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Validate MO2 backup naming, collisions, restore triples and checksum
+        shell: pwsh
+        run: |
+          python development/v2.4.1/test_sort_updates.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package verified Xingli v2.4.1
+        shell: pwsh
+        run: |
+          python development/v2.4.1/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Strict release diff and sorting security gates
+        shell: pwsh
+        run: |
+          @'
+          import ast, hashlib, json, pathlib, zipfile
+          root=pathlib.Path('.')
+          manifest=json.loads((root/'update/latest.json').read_text(encoding='utf-8-sig'))
+          package=manifest['package']
+          assert manifest['version']=='2.4.1'
+          path=root/'update/releases'/package['filename']
+          blob=path.read_bytes()
+          assert package['size']==len(blob)
+          assert package['sha256']==hashlib.sha256(blob).hexdigest()
+          assert package['mirrors'][0]['url'].startswith('https://gitee.com/')
+          with zipfile.ZipFile(root/'update/releases/xingli_Little_assistant_v2.4.0_update.zip') as before_zip,zipfile.ZipFile(path) as now_zip:
+            assert before_zip.testzip() is None and now_zip.testzip() is None
+            before={x.filename:before_zip.read(x) for x in before_zip.infolist() if not x.is_dir()}
+            now={x.filename:now_zip.read(x) for x in now_zip.infolist() if not x.is_dir()}
+            assert set(before)-set(now)==set()
+            assert {x for x in before if before[x]!=now[x]}=={
+              'xingli_Little_assistant/consolidation_controller.py',
+              'xingli_Little_assistant/version.ini'
+            }
+            assert set(now)-set(before)=={
+              'xingli_Little_assistant/sort_update_core.py',
+              'xingli_Little_assistant/sort_update_ui.py',
+              'xingli_Little_assistant/CHANGELOG_v2.4.1.md'
+            }
+            for name,contents in now.items():
+              if name.endswith('.py'):
+                ast.parse(contents.decode('utf-8-sig'),filename=name,feature_version=(3,8))
+            code=now['xingli_Little_assistant/consolidation_controller.py'].decode('utf-8')
+            assert 'mod_update_ui.maybe_auto_check(self)' not in code
+            assert 'mod_update_ui.show_update_center(self)' in code
+            assert 'sort_update_ui.startup_check(self)' in code
+            assert 'sort_update_ui.show_center(self)' in code
+            assert '📦  单独 MOD 更新' not in code
+            assert '📑  排序备份更新' in code
+            assert 'mobase.VersionInfo(2, 4, 1)' in code
+          sorting=json.loads((root/'sort/latest.json').read_text(encoding='utf-8-sig'))
+          assert sorting['product']=='xingli_sort_updates' and sorting['releases']==[]
+          print('RELEASE_V241_INTEGRITY_PASS',len(blob),package['sha256'])
+          '@ | Set-Content -LiteralPath ci_v241.py -Encoding UTF8
+          python ci_v241.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publish ZIP and empty sorting catalog to main
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'xingli-v241'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item update/latest.json "$dir/latest.json"
+          Copy-Item sort/latest.json "$dir/sort.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.4.1_update.zip "$dir/plugin.zip"
+          git fetch origin main
+          git checkout -B publish-v241 origin/main
+          @'
+          import json,pathlib
+          m=json.loads(pathlib.Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if m.get('version') not in ('2.4.0','2.4.1'):
+            raise SystemExit('Unexpected stable assistant version '+str(m.get('version')))
+          p=pathlib.Path('sort/latest.json')
+          if p.exists():
+            d=json.loads(p.read_text(encoding='utf-8'))
+            if d.get('releases'):
+              raise SystemExit('Refusing to erase published sorting releases')
+          '@ | Set-Content -LiteralPath ci_v241_guard.py -Encoding UTF8
+          python ci_v241_guard.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force -Path sort | Out-Null
+          Copy-Item "$dir/latest.json" update/latest.json
+          Copy-Item "$dir/sort.json" sort/latest.json
+          Copy-Item "$dir/plugin.zip" update/releases/xingli_Little_assistant_v2.4.1_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json sort/latest.json update/releases/xingli_Little_assistant_v2.4.1_update.zip
+          if (git diff --cached --quiet) {
+            Write-Host 'Already published'
+            exit 0
+          }
+          git commit -m "Release Xingli v2.4.1 MO2 sorting backup updates"
+          git push origin HEAD:main
