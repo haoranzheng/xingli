@@ -1,0 +1,61 @@
+name: Auto publish MO2 sorting from one TXT upload folder
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sort/inbox/**/*.txt'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: xingli-sort-inbox-main
+  cancel-in-progress: false
+jobs:
+  validate-and-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Stage only complete uploaded four-text batches
+        shell: pwsh
+        run: |
+          python development/v2.4.2/stage_inbox_sort.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Re-check all new raw URL hashes and archive independence
+        shell: pwsh
+        run: |
+          @'
+          import json,pathlib,hashlib,importlib.util
+          root=pathlib.Path('.')
+          core_path=root/'development/v2.4.2/sort_update_core.py'
+          spec=importlib.util.spec_from_file_location('sort_core',core_path)
+          core=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(core)
+          listing=json.loads((root/'sort/latest.json').read_text(encoding='utf-8-sig'))
+          records=core.validate_manifest(listing)
+          for item in records:
+            for name,info in item.get('files',{}).items():
+              dest=root/'sort/releases'/item['id']/('v'+item['version'])/name
+              assert dest.is_file(),dest
+              data=dest.read_bytes()
+              assert len(data)==info['size']
+              assert hashlib.sha256(data).hexdigest()==info['sha256']
+          print('DIRECT_MO2_TXT_RELEASE_VALID',len(records))
+          '@ | Set-Content -LiteralPath stage_hash_check.py -Encoding UTF8
+          python stage_hash_check.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish raw text and manifest in a single atomic git commit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sort/releases sort/latest.json
+          if (git diff --cached --quiet) {
+            Write-Host "INCOMPLETE or already published; no new push"
+            exit 0
+          }
+          git commit -m "Publish direct raw MO2 sorting text updates from inbox"
+          git push origin HEAD:main

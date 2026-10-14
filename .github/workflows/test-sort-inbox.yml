@@ -1,0 +1,21 @@
+name: Test single-folder sorting inbox upload
+on:
+  push:
+    branches: [feature/sort-inbox-one-step-upload]
+    paths:
+      - '.github/workflows/test-sort-inbox.yml'
+      - 'development/v2.4.2/stage_inbox_sort.py'
+      - 'development/v2.4.2/test_sort_inbox.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check native raw text staging and version conflict protection
+        shell: pwsh
+        run: |
+          python development/v2.4.2/test_sort_inbox.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
