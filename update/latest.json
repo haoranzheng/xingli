@@ -2,22 +2,22 @@
   "schema": 2,
   "product": "xingli_Little_assistant",
   "channel": "stable",
-  "version": "2.3.1",
-  "title": "星黎 MO2 小助手 2.3.1（更新通知测试）",
-  "published_at": "2026-10-14T04:43:52+00:00",
-  "changelog": "v2.3.1 虚拟更新推送测试：验证启动 MO2 后的新版本主动弹窗提示。插件功能与 v2.3.0 保持一致；可选择稍后提醒，也可正常安装测试包。",
+  "version": "2.4.0",
+  "title": "星黎 MO2 小助手 v2.4.0 — 独立 MOD 更新",
+  "published_at": "2026-10-14T05:58:02+00:00",
+  "changelog": "新增独立 MOD 更新功能：MO2 启动检测并主动通知，Cloudflare R2 自定义域名 + Gitee/GitHub 清单，断点续传、SHA256 校验和 MO2 安装前完整备份。MOD 清单初始为空，等待作者上传首个实际 MOD 更新包。",
   "package": {
-    "filename": "xingli_Little_assistant_v2.3.1_update.zip",
-    "size": 232927,
-    "sha256": "fffbfbbecc6928b267bb188233acd8cc133e617e9da76f6e948c1ef1968c90ce",
+    "filename": "xingli_Little_assistant_v2.4.0_update.zip",
+    "size": 243695,
+    "sha256": "adfcb0f6a4d50142cc1fc5cbe98318838d8bfea23c2b2d2fc8f8c384c5563b42",
     "mirrors": [
       {
         "name": "Gitee 国内主源",
-        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.3.1_update.zip"
+        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.4.0_update.zip"
       },
       {
         "name": "GitHub 备用源",
-        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.3.1_update.zip"
+        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.4.0_update.zip"
       }
     ]
   }
