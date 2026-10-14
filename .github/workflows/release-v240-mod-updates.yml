@@ -1,0 +1,112 @@
+name: Xingli v2.4.0 per-MOD updates CI and mirror publish
+on:
+  push:
+    branches: [feature/v2.4.0-per-mod-r2-update]
+    paths:
+      - '.github/workflows/release-v240-mod-updates.yml'
+      - 'development/v2.4.0/**'
+      - 'mods/latest.json'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Run per-MOD unit tests without network or cloud secrets
+        shell: pwsh
+        run: |
+          python development/v2.4.0/test_mod_updates.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build v2.4.0 from actual 2.3.1 release
+        shell: pwsh
+        run: |
+          python development/v2.4.0/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Strict ZIP diff and manifest verification
+        shell: pwsh
+        run: |
+          @'
+          import ast,hashlib,json,pathlib,zipfile
+          root=pathlib.Path('.')
+          manifest=json.loads((root/'update/latest.json').read_text(encoding='utf-8-sig'))
+          package=manifest['package']
+          current=root/'update/releases'/package['filename']
+          data=current.read_bytes()
+          assert manifest['version']=='2.4.0'
+          assert manifest['product']=='xingli_Little_assistant'
+          assert package['size']==len(data)
+          assert hashlib.sha256(data).hexdigest()==package['sha256']
+          assert package['mirrors'][0]['url'].startswith('https://gitee.com/')
+          with zipfile.ZipFile(root/'update/releases/xingli_Little_assistant_v2.3.1_update.zip') as old,zipfile.ZipFile(current) as new:
+            assert old.testzip() is None and new.testzip() is None
+            before={x.filename:old.read(x) for x in old.infolist() if not x.is_dir()}
+            after={x.filename:new.read(x) for x in new.infolist() if not x.is_dir()}
+            changed={name for name in before if before[name]!=after[name]}
+            expected={'xingli_Little_assistant/consolidation_controller.py','xingli_Little_assistant/version.ini'}
+            assert changed==expected,changed
+            added=set(after)-set(before)
+            assert added=={
+              'xingli_Little_assistant/mod_update_core.py',
+              'xingli_Little_assistant/mod_update_ui.py',
+              'xingli_Little_assistant/mod_update_sources.json',
+              'xingli_Little_assistant/CHANGELOG_v2.4.0.md'
+            },added
+            for name,payload in after.items():
+              if name.endswith('.py'):
+                ast.parse(payload.decode('utf-8-sig'),filename=name,feature_version=(3,8))
+              assert '__pycache__' not in name and '.download' not in name
+            controller=after['xingli_Little_assistant/consolidation_controller.py'].decode('utf-8')
+            assert 'mod_update_ui.maybe_auto_check(self)' in controller
+            assert 'mod_update_ui.show_update_center(self)' in controller
+            assert 'mobase.VersionInfo(2, 4, 0)' in controller
+            assert '2.4.0' in after['xingli_Little_assistant/version.ini'].decode()
+          cat=json.loads((root/'mods/latest.json').read_text(encoding='utf-8'))
+          assert cat['product']=='xingli_mod_updates' and cat['mods']==[]
+          print('ZIP_DIFF_AND_MANIFEST_PASS',len(data),package['sha256'])
+          '@ | Set-Content -LiteralPath ci_v240_validate.py -Encoding UTF8
+          python ci_v240_validate.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish validated plugin and empty MOD catalog to main
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $staging = Join-Path $env:RUNNER_TEMP 'xingli-240'
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item update/latest.json "$staging/latest.json"
+          Copy-Item mods/latest.json "$staging/mods-latest.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.4.0_update.zip "$staging/plugin.zip"
+          git fetch origin main
+          git checkout -B publish-v240 origin/main
+          @'
+          import json,pathlib
+          data=json.loads(pathlib.Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if data.get('version') not in ('2.3.1','2.4.0'):
+            raise SystemExit('Unexpected stable head: '+str(data.get('version')))
+          cat=pathlib.Path('mods/latest.json')
+          if cat.exists():
+            existing=json.loads(cat.read_text(encoding='utf-8'))
+            if existing.get('mods'):
+              raise SystemExit('Refusing to replace a live non-empty MOD catalog')
+          '@ | Set-Content -LiteralPath ci_v240_main_guard.py -Encoding UTF8
+          python ci_v240_main_guard.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force -Path mods | Out-Null
+          Copy-Item "$staging/latest.json" update/latest.json
+          Copy-Item "$staging/mods-latest.json" mods/latest.json
+          Copy-Item "$staging/plugin.zip" update/releases/xingli_Little_assistant_v2.4.0_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json mods/latest.json update/releases/xingli_Little_assistant_v2.4.0_update.zip
+          if (git diff --cached --quiet) {
+            Write-Host 'v2.4.0 already published'
+            exit 0
+          }
+          git commit -m "Release Xingli v2.4.0 per-MOD update system with R2 support"
+          git push origin HEAD:main
