@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "timeout_seconds": 8,
+  "manifest_urls": [
+    "https://gitee.com/HR-world/xingli/raw/main/mods/latest.json",
+    "https://raw.githubusercontent.com/haoranzheng/xingli/main/mods/latest.json"
+  ],
+  "r2_custom_domain": ""
+}
