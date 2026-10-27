@@ -1,0 +1,99 @@
+name: Xingli v2.4.3 sorting mirror reliability hotfix
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.4.3/**'
+      - '.github/workflows/release-v243-sort-reliability.yml'
+      - 'sort/latest.json'
+  push:
+    branches: [main]
+    paths:
+      - 'development/v2.4.3/**'
+      - '.github/workflows/release-v243-sort-reliability.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Test mirror redirects and backup validation
+        shell: pwsh
+        run: |
+          python development/v2.4.3/test_mirror_reliability.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_raw_sort.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_staged_sort_manifest.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build v2.4.3 package
+        shell: pwsh
+        run: |
+          python development/v2.4.3/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify file changes and package catalog
+        shell: pwsh
+        run: |
+          @'
+          import ast,hashlib,json,pathlib,zipfile
+          root=pathlib.Path('.')
+          m=json.loads((root/'update/latest.json').read_text(encoding='utf-8'))
+          p=m['package']
+          new_file=root/'update/releases'/p['filename']
+          blob=new_file.read_bytes()
+          assert m['version']=='2.4.3'
+          assert len(blob)==p['size']
+          assert hashlib.sha256(blob).hexdigest()==p['sha256']
+          assert p['mirrors'][0]['url'].startswith('https://gitee.com/')
+          with zipfile.ZipFile(root/'update/releases/xingli_Little_assistant_v2.4.2_update.zip') as old,zipfile.ZipFile(new_file) as new:
+            assert old.testzip() is None and new.testzip() is None
+            a={x.filename:old.read(x) for x in old.infolist() if not x.is_dir()}
+            b={x.filename:new.read(x) for x in new.infolist() if not x.is_dir()}
+            assert not(set(a)-set(b))
+            assert {x for x in a if a[x]!=b[x]}=={
+              'xingli_Little_assistant/consolidation_controller.py',
+              'xingli_Little_assistant/sort_update_core.py',
+              'xingli_Little_assistant/sort_update_ui.py',
+              'xingli_Little_assistant/version.ini'}
+            assert set(b)-set(a)=={'xingli_Little_assistant/CHANGELOG_v2.4.3.md'}
+            for path,data in b.items():
+              if path.endswith('.py'):
+                ast.parse(data.decode('utf-8-sig'),filename=path,feature_version=(3,8))
+          print('V243_RELEASE_VALID',len(blob),p['sha256'])
+          '@ | Set-Content -LiteralPath validate_v243.py -Encoding UTF8
+          python validate_v243.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish package only after merge into main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir=Join-Path $env:RUNNER_TEMP 'xingli-243'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          Copy-Item update/latest.json "$dir/latest.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.4.3_update.zip "$dir/update.zip"
+          git fetch origin main
+          git checkout -B publish-v243 origin/main
+          @'
+          import json,pathlib
+          data=json.loads(pathlib.Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if data.get('version') not in ('2.4.2','2.4.3'):
+            raise SystemExit('Unexpected updater version: '+str(data.get('version')))
+          '@ | Set-Content -LiteralPath main_guard_v243.py -Encoding UTF8
+          python main_guard_v243.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$dir/latest.json" update/latest.json
+          Copy-Item "$dir/update.zip" update/releases/xingli_Little_assistant_v2.4.3_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.4.3_update.zip
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "Release Xingli v2.4.3 sorting mirror reliability hotfix"
+          git push origin HEAD:main
