@@ -82,7 +82,7 @@ class QtPreviewTests(unittest.TestCase):
     def test_exception_is_caught_inside_slot(self):
         class BrokenOrganizer:
             def managedGame(self):
-                raise RuntimeError("MO2 unavailable")
+                return Organizer([]).managedGame()
             def modList(self):
                 raise RuntimeError("MOD list unavailable")
         with patch.object(QtWidgets.QMessageBox, "warning", return_value=None) as warn:
