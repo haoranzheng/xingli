@@ -6,6 +6,14 @@ on:
       - '.github/workflows/test-sort-inbox.yml'
       - 'development/v2.4.2/stage_inbox_sort.py'
       - 'development/v2.4.2/test_sort_inbox.py'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.gitattributes'
+      - 'sort/latest.json'
+      - 'sort/releases/**/*.txt'
+      - 'development/v2.4.2/**'
+      - '.github/workflows/*sort*.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,4 +26,8 @@ jobs:
         shell: pwsh
         run: |
           python development/v2.4.2/test_sort_inbox.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_raw_sort.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_staged_sort_manifest.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
