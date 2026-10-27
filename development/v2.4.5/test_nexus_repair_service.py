@@ -1,6 +1,7 @@
 # coding: utf-8
 """Regressions for lifecycle-safe MO2 metadata correction."""
 import importlib
+import importlib.util
 import sys
 import types
 from pathlib import Path
