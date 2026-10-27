@@ -12,8 +12,8 @@
       "changelog": "官方排序文件更新：下载保存为当前 Profile 的新增备份；不会直接改变现有排序。",
       "files": {
         "modlist.txt": {
-          "size": 97325,
-          "sha256": "26101b94d5b413b0e13d81764e9b531ca42db7ae658e121ce023288ba97d0136",
+          "size": 95452,
+          "sha256": "92b2707ca5ce4231e8561c4a3f882b697ebf4abb81babab11391612451da41c7",
           "mirrors": [
             {
               "name": "Gitee 国内主源",
@@ -35,8 +35,8 @@
       "changelog": "官方排序文件更新：下载保存为当前 Profile 的新增备份；不会直接改变现有排序。",
       "files": {
         "plugins.txt": {
-          "size": 68941,
-          "sha256": "14ca39f7e8b188dea626624ae188e18b33ebd55b59a3f220459b00c79c87b11a",
+          "size": 66923,
+          "sha256": "8ae89606bbe256a7150af1432fee92f9d53f183630d75a7fbdcddc95c85235fc",
           "mirrors": [
             {
               "name": "Gitee 国内主源",
@@ -49,8 +49,8 @@
           ]
         },
         "loadorder.txt": {
-          "size": 69087,
-          "sha256": "a1d6485d3497d9b8263d053767f01fc9748260f288068eb898d439d8ed59a4a6",
+          "size": 66989,
+          "sha256": "4efbbbd3cfe41bff6c2cb734c39f32b9fe79cfe3e6631e146195fe426612bd73",
           "mirrors": [
             {
               "name": "Gitee 国内主源",

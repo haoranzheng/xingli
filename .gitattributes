@@ -1,0 +1,2 @@
+# Preserve exact MO2 sorting TXT bytes at publish time (avoid Git for Windows CRLF normalization).
+sort/releases/*/v*/*.txt -text
