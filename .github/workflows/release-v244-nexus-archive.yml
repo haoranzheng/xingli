@@ -1,0 +1,102 @@
+name: Xingli v2.4.4 Nexus archive ID safety
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.4.4/**'
+      - '.github/workflows/release-v244-nexus-archive.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'development/v2.4.4/**'
+      - '.github/workflows/release-v244-nexus-archive.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Test strict filename recognition and non-destructive metadata behavior
+        shell: pwsh
+        run: |
+          python development/v2.4.4/test_nexus_archive_metadata.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.3/test_mirror_reliability.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_raw_sort.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build next release ZIP from v2.4.3 baseline
+        shell: pwsh
+        run: |
+          python development/v2.4.4/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify release ZIP, metadata and minimal patch
+        shell: pwsh
+        run: |
+          @'
+          import ast,hashlib,json,pathlib,zipfile
+          root=pathlib.Path('.')
+          data=json.loads((root/'update/latest.json').read_text(encoding='utf-8'))
+          p=data['package']
+          package=root/'update/releases'/p['filename']
+          blob=package.read_bytes()
+          assert data['version']=='2.4.4'
+          assert len(blob)==p['size']
+          assert hashlib.sha256(blob).hexdigest()==p['sha256']
+          assert p['mirrors'][0]['url'].startswith('https://gitee.com/')
+          old_package=root/'update/releases/xingli_Little_assistant_v2.4.3_update.zip'
+          with zipfile.ZipFile(old_package) as old,zipfile.ZipFile(package) as new:
+            assert old.testzip() is None and new.testzip() is None
+            a={x.filename:old.read(x) for x in old.infolist() if not x.is_dir()}
+            b={x.filename:new.read(x) for x in new.infolist() if not x.is_dir()}
+            assert not (set(a)-set(b))
+            expected_changes={
+              'xingli_Little_assistant/consolidation_controller.py',
+              'xingli_Little_assistant/mod_manager.py',
+              'xingli_Little_assistant/version.ini',
+            }
+            assert {x for x in a if a[x]!=b[x]}==expected_changes
+            assert set(b)-set(a)=={
+              'xingli_Little_assistant/nexus_archive_metadata.py',
+              'xingli_Little_assistant/CHANGELOG_v2.4.4.md'}
+            for name,content in b.items():
+              if name.endswith('.py'):
+                ast.parse(content.decode('utf-8-sig'),filename=name,feature_version=(3,8))
+          print('V244_PACKAGE_VALID',len(blob),p['sha256'])
+          '@ | Set-Content -LiteralPath validate_v244.py -Encoding UTF8
+          python validate_v244.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish package only after merge to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir=Join-Path $env:RUNNER_TEMP 'xingli-244'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          Copy-Item update/latest.json "$dir/latest.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.4.4_update.zip "$dir/update.zip"
+          git fetch origin main
+          git checkout -B publish-v244 origin/main
+          @'
+          import json,pathlib
+          data=json.loads(pathlib.Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if data.get('version') not in ('2.4.3','2.4.4'):
+            raise SystemExit('Unexpected updater version: '+str(data.get('version')))
+          '@ | Set-Content -LiteralPath main_guard_v244.py -Encoding UTF8
+          python main_guard_v244.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$dir/latest.json" update/latest.json
+          Copy-Item "$dir/update.zip" update/releases/xingli_Little_assistant_v2.4.4_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.4.4_update.zip
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "Release Xingli v2.4.4 safe Nexus archive ID repair"
+          git push origin HEAD:main
