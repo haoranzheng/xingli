@@ -2,22 +2,22 @@
   "schema": 2,
   "product": "xingli_Little_assistant",
   "channel": "stable",
-  "version": "2.4.3",
-  "title": "星黎 MO2 小助手 2.4.3：排序下载可靠性修复",
-  "published_at": "2026-10-27T04:06:46+00:00",
-  "changelog": "修复 Gitee 排序 TXT 下载重定向和镜像清单不同步问题；保持 MO2 排序备份的 SHA256 校验及非覆盖行为。",
+  "version": "2.4.4",
+  "title": "星黎 MO2 小助手 2.4.4：Nexus MOD ID 识别修复",
+  "published_at": "2026-10-27T05:35:11+00:00",
+  "changelog": "兼容含 Nexus 编号、版本和时间戳的归档名称，修正安装后误写为 10 的 MOD ID / 链接；已安装 MOD 可预览并逐项勾选修复；保留自定义网址和其他有效编号。",
   "package": {
-    "filename": "xingli_Little_assistant_v2.4.3_update.zip",
-    "size": 254931,
-    "sha256": "45b175ac10b7b0ae6c4d0a9dd123d1a078c932a3dda937f4dc22303c26a1b6a5",
+    "filename": "xingli_Little_assistant_v2.4.4_update.zip",
+    "size": 259019,
+    "sha256": "a6068df540ec30b3dcb4259b3d7f9e1f11d48e37a95ee2418e5ad3b2390975da",
     "mirrors": [
       {
         "name": "Gitee 国内主源",
-        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.4.3_update.zip"
+        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.4.4_update.zip"
       },
       {
         "name": "GitHub 备用源",
-        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.4.3_update.zip"
+        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.4.4_update.zip"
       }
     ]
   }
