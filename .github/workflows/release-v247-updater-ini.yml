@@ -1,0 +1,79 @@
+name: Xingli v2.4.7 updater package INI hotfix
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.4.7/**'
+      - '.github/workflows/release-v247-updater-ini.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'development/v2.4.7/**'
+      - '.github/workflows/release-v247-updater-ini.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Rebuild v2.4.7 from published runtime ZIP
+        shell: pwsh
+        run: |
+          python development/v2.4.7/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Reproduce real v2.4.6 failure and validate fixed actual updater parser
+        shell: pwsh
+        run: |
+          python development/v2.4.7/test_update_prepare.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Regression for version confirmation and prior MOD functionality
+        shell: pwsh
+        run: |
+          python development/v2.4.6/test_modpack_confirmation.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.5/test_nexus_repair_service.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.4/test_nexus_archive_metadata.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.3/test_mirror_reliability.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_raw_sort.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish after merge to main only
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'xingli-v247'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          Copy-Item update/latest.json "$dir/latest.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.4.7_update.zip "$dir/update.zip"
+          git fetch origin main
+          git checkout -B publish-v247 origin/main
+          @'
+          import json, pathlib
+          m = json.loads(pathlib.Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if m.get('version') not in ('2.4.6', '2.4.7'):
+              raise SystemExit('unexpected published version ' + str(m.get('version')))
+          '@ | Set-Content -LiteralPath guard_v247.py -Encoding utf8
+          python guard_v247.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$dir/latest.json" update/latest.json
+          Copy-Item "$dir/update.zip" update/releases/xingli_Little_assistant_v2.4.7_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.4.7_update.zip
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "Publish v2.4.7 updater version.ini hotfix"
+          git push origin HEAD:main
