@@ -2,22 +2,22 @@
   "schema": 2,
   "product": "xingli_Little_assistant",
   "channel": "stable",
-  "version": "2.4.6",
-  "title": "星黎 MO2 小助手 2.4.6：整合包版本确认",
-  "published_at": "2026-11-08T11:26:32+00:00",
-  "changelog": "新增整合包版本确认：用户确认当前 MO2 实例已安装并正在使用远程版本后，自动同步本地根目录/插件持久版本记录；仅下载未安装时可继续前往网盘，取消或稍后不会修改本地版本。适用于所有后续整合包版本。",
+  "version": "2.4.7",
+  "title": "星黎 MO2 小助手 2.4.7：修复更新安装准备失败",
+  "published_at": "2026-11-08T14:52:42+00:00",
+  "changelog": "修复 2.4.6 更新包 version.ini 的错误换行编码，解决“更新文件已下载，但准备安装失败：更新包版本信息无效”。保留 2.4.6 的整合包版本确认功能和既有 MOD、排序功能。",
   "package": {
-    "filename": "xingli_Little_assistant_v2.4.6_update.zip",
-    "size": 267089,
-    "sha256": "1da7b24a85238bc0a183f436a7c861793e8fd445edcfadfe76266bc4e5e7deb0",
+    "filename": "xingli_Little_assistant_v2.4.7_update.zip",
+    "size": 267607,
+    "sha256": "034b4c4f8f8a7512aecc29a1524fa9d42ea56ea3ea0c6bc9bd160e0c1724f8b5",
     "mirrors": [
       {
         "name": "Gitee 国内主源",
-        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.4.6_update.zip"
+        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.4.7_update.zip"
       },
       {
         "name": "GitHub 备用源",
-        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.4.6_update.zip"
+        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.4.7_update.zip"
       }
     ]
   }
