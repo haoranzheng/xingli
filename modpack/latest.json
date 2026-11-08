@@ -4,23 +4,24 @@
   "enabled": true,
   "pack_id": "xingli-skyrim",
   "name": "星黎整合包",
-  "version": "3.3.1",
-  "title": "星黎整合包 3.3.1",
-  "published_at": "2026-09-09T09:53:00+08:00",
-  "changelog": "当前正式稳定版本。后续整合内容更新时只需提升 version 并填写对应更新说明，星黎助手会自动提示用户。",
-  "download_page": "https://pan.quark.cn/s/cb6b1774f50b",
-  "extract_code": "dbrf",
+  "version": "4.0",
+  "title": "星黎整合包 4.0",
+  "published_at": "2026-11-08T10:51:31.217Z",
+  "changelog": "星黎整合包已更新至 4.0。\n压缩包解压密码：xingli。",
+  "download_page": "https://pan.quark.cn/s/3846514ea1d8",
+  "extract_code": "mrUd",
   "download_pages": [
     {
       "name": "夸克网盘",
-      "url": "https://pan.quark.cn/s/cb6b1774f50b",
-      "code": "dbrf"
+      "url": "https://pan.quark.cn/s/3846514ea1d8",
+      "code": "mrUd"
     },
     {
       "name": "百度网盘",
-      "url": "https://pan.baidu.com/s/1Gbh37U81nsgzseZ0fbM6Mg",
-      "code": "9se4"
+      "url": "https://pan.baidu.com/s/1EbZuVc6Xcf7q-OJfRuKBaw?pwd=rw5f",
+      "code": "rw5f"
     }
   ],
-  "message": "整合包内容更新只提供通知与网盘跳转，不会自动修改本地 MOD。"
+  "message": "整合包 4.0 仅提供更新通知与网盘跳转，不会自动修改本地 MOD；下载后的压缩包解压密码为 xingli。",
+  "archive_password": "xingli"
 }
