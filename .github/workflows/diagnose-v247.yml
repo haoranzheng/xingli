@@ -1,0 +1,22 @@
+name: Diagnose Xingli updater prepare version failure
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.4.7/inspect_update_prepare.py'
+      - '.github/workflows/diagnose-v247.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dump exact bundled update preparation logic
+        shell: pwsh
+        env:
+          PYTHONUTF8: '1'
+        run: python development/v2.4.7/inspect_update_prepare.py
