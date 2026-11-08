@@ -10,14 +10,14 @@ with zipfile.ZipFile(zip_path) as z:
     names = z.namelist()
     print("=== MATCHING FILE NAMES ===")
     for name in names:
-        if any(k in name.lower() for k in ("modpack", "version", "identity", "controller")):
+        if any(k in name.lower() for k in ("modpack", "version", "identity", "controller", "mainmenu_sync")):
             print(name)
     targets = [
-        "xingli_Little_assistant/modpack_updater.py",
         "xingli_Little_assistant/modpack_release.json",
         "xingli_Little_assistant/modpack_update_sources.json",
+        "xingli_Little_assistant/mainmenu_sync.py",
+        "xingli_Little_assistant/modpack_updater.py",
         "xingli_Little_assistant/instance_identity.py",
-        "xingli_Little_assistant/consolidation_controller.py",
     ]
     print("=== TARGET MODULES ===")
     for name in targets:
