@@ -90,19 +90,20 @@ class ModpackPromptIntegrationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.extract = self.root / "plugin"
+        self.extract = self.root / "extracted"
         self.extract.mkdir()
         if not PACKAGE.is_file():
             self.fail("v2.4.6 package missing; run build_release.py before this test")
         with zipfile.ZipFile(PACKAGE) as archive:
             archive.extractall(self.extract)
+        self.plugin_dir = self.extract / "xingli_Little_assistant"
 
         self.base = self.root / "MO2"
         self.base.mkdir()
         self.plugin_data = self.root / "pluginData"
         self.plugin_data.mkdir()
         self.controller = types.SimpleNamespace(
-            plugin_path=str(self.extract),
+            plugin_path=str(self.plugin_dir),
             organizer=FakeOrganizer(self.base, self.plugin_data),
             window=None,
         )
@@ -124,7 +125,7 @@ class ModpackPromptIntegrationTests(unittest.TestCase):
 
         package_name = "xingli_prompt_test_{}".format(id(self))
         package = types.ModuleType(package_name)
-        package.__path__ = [str(self.extract)]
+        package.__path__ = [str(self.plugin_dir)]
         import sys
         sys.modules[package_name] = package
         self.addCleanup(lambda: sys.modules.pop(package_name, None))
@@ -146,7 +147,7 @@ class ModpackPromptIntegrationTests(unittest.TestCase):
 
         spec = importlib.util.spec_from_file_location(
             package_name + ".modpack_updater",
-            str(self.extract / "modpack_updater.py"),
+            str(self.plugin_dir / "modpack_updater.py"),
         )
         self.updater = importlib.util.module_from_spec(spec)
         sys.modules[package_name + ".modpack_updater"] = self.updater
@@ -173,7 +174,7 @@ class ModpackPromptIntegrationTests(unittest.TestCase):
         self.assertEqual(marker["installed_version"], "4.0")
         self.assertEqual(marker["confirmation_source"], "user_confirmed_installed_release")
         self.assertEqual(
-            json.loads((self.extract / "modpack_release.json").read_text(encoding="utf-8"))["installed_version"],
+            json.loads((self.plugin_dir / "modpack_release.json").read_text(encoding="utf-8"))["installed_version"],
             "3.3.1",
         )
         self.assertEqual(self.controller._xingli_modpack_update_status["state"], "up_to_date")
