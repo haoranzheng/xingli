@@ -1,0 +1,138 @@
+name: Xingli v2.4.6 generic modpack version confirmation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.4.6/**'
+      - '.github/workflows/release-v246-modpack-confirmation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'development/v2.4.6/**'
+      - '.github/workflows/release-v246-modpack-confirmation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-build:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Test modpack version marker confirmation service
+        shell: pwsh
+        run: |
+          python development/v2.4.6/test_modpack_confirmation.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run existing Nexus, mirror and sorting regression tests
+        shell: pwsh
+        run: |
+          python development/v2.4.5/test_nexus_repair_service.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.4/test_nexus_archive_metadata.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.3/test_mirror_reliability.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_raw_sort.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install Qt6 and test existing repair UI plus packaged confirmation prompt
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check 'PyQt6==6.8.1'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.5/test_nexus_repair_ui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build v2.4.6 runtime package
+        shell: pwsh
+        run: |
+          python development/v2.4.6/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.6/test_modpack_prompt.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify exact ZIP diff, version metadata and package integrity
+        shell: pwsh
+        run: |
+          @'
+          import ast, hashlib, json, pathlib, zipfile
+          root = pathlib.Path('.')
+          latest = json.loads((root / 'update/latest.json').read_text(encoding='utf-8-sig'))
+          assert latest['version'] == '2.4.6'
+          package = latest['package']
+          target = root / 'update/releases' / package['filename']
+          blob = target.read_bytes()
+          assert len(blob) == package['size']
+          assert hashlib.sha256(blob).hexdigest() == package['sha256']
+          assert package['mirrors'][0]['url'].startswith('https://gitee.com/')
+          assert package['mirrors'][1]['url'].startswith('https://raw.githubusercontent.com/')
+          baseline = root / 'update/releases/xingli_Little_assistant_v2.4.5_update.zip'
+          with zipfile.ZipFile(baseline) as old, zipfile.ZipFile(target) as new:
+              assert old.testzip() is None and new.testzip() is None
+              a = {x.filename: old.read(x) for x in old.infolist() if not x.is_dir()}
+              b = {x.filename: new.read(x) for x in new.infolist() if not x.is_dir()}
+              assert not (set(a) - set(b))
+              assert {x for x in a if a[x] != b[x]} == {
+                  'xingli_Little_assistant/consolidation_controller.py',
+                  'xingli_Little_assistant/modpack_updater.py',
+                  'xingli_Little_assistant/version.ini',
+              }
+              assert set(b) - set(a) == {
+                  'xingli_Little_assistant/modpack_confirmation.py',
+                  'xingli_Little_assistant/CHANGELOG_v2.4.6.md',
+              }
+              bootstrap = json.loads(b['xingli_Little_assistant/modpack_release.json'].decode('utf-8-sig'))
+              assert bootstrap['installed_version'] == '3.3.1'
+              for name, data in b.items():
+                  if name.endswith('.py'):
+                      ast.parse(data.decode('utf-8-sig'), filename=name, feature_version=(3, 8))
+              updater = b['xingli_Little_assistant/modpack_updater.py'].decode('utf-8')
+              assert '我已安装并正在使用此版本' in updater
+              assert 'confirm_installed_version' in updater
+          print('V246_PACKAGE_VALID', len(blob), package['sha256'])
+          '@ | Set-Content -LiteralPath validate_v246.py -Encoding UTF8
+          python validate_v246.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publish package and updater manifest after merge to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'xingli-v246'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          Copy-Item update/latest.json "$dir/latest.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.4.6_update.zip "$dir/update.zip"
+          git fetch origin main
+          git checkout -B publish-v246 origin/main
+          @'
+          import json, pathlib
+          data = json.loads(pathlib.Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if data.get('version') not in ('2.4.5', '2.4.6'):
+              raise SystemExit('Unexpected updater version: ' + str(data.get('version')))
+          '@ | Set-Content -LiteralPath main_guard_v246.py -Encoding UTF8
+          python main_guard_v246.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$dir/latest.json" update/latest.json
+          Copy-Item "$dir/update.zip" update/releases/xingli_Little_assistant_v2.4.6_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.4.6_update.zip
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "Release Xingli Assistant v2.4.6 modpack version confirmation"
+          git push origin HEAD:main
