@@ -50,7 +50,7 @@ def patch_modpack_updater(source):
         "from . import mainmenu_sync\nfrom . import modpack_confirmation\n",
         "confirmation service import",
     )
-    method = '''def prompt_update(controller, manifest: Optional[Dict[str, object]] = None, automatic: bool = False) -> bool:
+    method = r'''def prompt_update(controller, manifest: Optional[Dict[str, object]] = None, automatic: bool = False) -> bool:
     """Offer download or explicit confirmation that this MO2 instance already runs the release."""
     manifest = manifest or getattr(controller, "_modpack_update_manifest", None)
     if not isinstance(manifest, dict):
