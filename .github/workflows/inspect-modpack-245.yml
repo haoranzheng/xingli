@@ -1,0 +1,20 @@
+name: Inspect v2.4.5 modpack version flow
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.4.6/inspect_modpack.py'
+      - '.github/workflows/inspect-modpack-245.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dump modpack version implementation from published runtime
+        shell: pwsh
+        run: python development/v2.4.6/inspect_modpack.py
