@@ -251,7 +251,7 @@ def main():
         ],
     }
     LATEST.write_text(
-        json.dumps(old, ensure_ascii=False, indent=2) + "\\n",
+        json.dumps(old, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     print("BUILD_V246_PASS", len(blob), old["package"]["sha256"])
