@@ -2,22 +2,22 @@
   "schema": 2,
   "product": "xingli_Little_assistant",
   "channel": "stable",
-  "version": "2.4.5",
-  "title": "星黎 MO2 小助手 2.4.5：Nexus 修复稳定性",
-  "published_at": "2026-10-27T09:18:26+00:00",
-  "changelog": "修复 MOD 元数据修复闪退风险、支持全选和多选；重新获取 MO2 MOD 对象防止失效引用，并增加安装后校验重试。",
+  "version": "2.4.6",
+  "title": "星黎 MO2 小助手 2.4.6：整合包版本确认",
+  "published_at": "2026-11-08T11:26:32+00:00",
+  "changelog": "新增整合包版本确认：用户确认当前 MO2 实例已安装并正在使用远程版本后，自动同步本地根目录/插件持久版本记录；仅下载未安装时可继续前往网盘，取消或稍后不会修改本地版本。适用于所有后续整合包版本。",
   "package": {
-    "filename": "xingli_Little_assistant_v2.4.5_update.zip",
-    "size": 263087,
-    "sha256": "69412d50c9e7a8e09dd6439425536a23d9b2b65e0aa93e54b919dbe4bba03734",
+    "filename": "xingli_Little_assistant_v2.4.6_update.zip",
+    "size": 267089,
+    "sha256": "1da7b24a85238bc0a183f436a7c861793e8fd445edcfadfe76266bc4e5e7deb0",
     "mirrors": [
       {
         "name": "Gitee 国内主源",
-        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.4.5_update.zip"
+        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.4.6_update.zip"
       },
       {
         "name": "GitHub 备用源",
-        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.4.5_update.zip"
+        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.4.6_update.zip"
       }
     ]
   }
