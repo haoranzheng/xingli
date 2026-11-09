@@ -128,7 +128,7 @@ class ProfileDownloadTests(unittest.TestCase):
             record = make_record(blob, name="星黎 4.0 默认档案")
             result = core.install_profile_archive(organizer, record, blob)
             target = Path(result["path"])
-            self.assertEqual(target.parent, root)
+            self.assertEqual(target.parent.resolve(), root.resolve())
             self.assertTrue((target / "modlist.txt").is_file())
             self.assertEqual((target / "Skyrim.ini").read_bytes(), b"[General]\n")
             self.assertEqual((active / "modlist.txt").read_text(encoding="utf-8"), "+Current Mod\n")
