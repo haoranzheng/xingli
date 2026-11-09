@@ -200,7 +200,11 @@ class ProfileCenter(QtWidgets.QDialog):
                 self.download_button.setEnabled(False)
                 return
             self.records = result["data"] or []
-            receipts = core.read_receipts(core.receipt_path(self.controller.organizer))
+            try:
+                receipts = core.read_receipts(core.receipt_path(self.controller.organizer))
+            except Exception:
+                logger.exception("读取档案下载回执失败")
+                receipts = {}
             self.list.clear()
             for record in self.records:
                 installed = receipts.get(record["id"])
