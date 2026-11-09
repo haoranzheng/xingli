@@ -164,7 +164,7 @@ def download_package(record, timeout=20):
 
 
 def _safe_member_name(name):
-    if not isinstance(name, str) or not name or "\\" in name or name.startswith("/"):
+    if not isinstance(name, str) or not name or len(name) > 220 or "\\" in name or name.startswith("/"):
         raise ProfileError("档案 ZIP 包含异常文件路径")
     if re.match(r"^[A-Za-z]:", name):
         raise ProfileError("档案 ZIP 包含盘符路径")
@@ -205,6 +205,8 @@ def validate_profile_archive(blob):
             key = "/".join(parts).casefold()
             if key in seen:
                 raise ProfileError("档案 ZIP 包含重复文件名")
+            if any(key.startswith(existing + "/") or existing.startswith(key + "/") for existing in seen):
+                raise ProfileError("档案 ZIP 包含文件与目录路径冲突")
             seen.add(key)
             if len(files) >= MAX_FILES:
                 raise ProfileError("档案文件数量超过安全限制")
