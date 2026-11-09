@@ -117,6 +117,21 @@ class ProfileDownloadTests(unittest.TestCase):
         with self.assertRaisesRegex(core.ProfileError, "modlist.txt"):
             core.validate_profile_archive(make_archive({"plugins.txt": b"*A.esp\n"}))
 
+    def test_windows_reserved_names_and_file_directory_conflicts_are_rejected(self):
+        reserved = make_archive({
+            "modlist.txt": b"+A\\n",
+            "CON.txt": b"reserved",
+        })
+        with self.assertRaises(core.ProfileError):
+            core.validate_profile_archive(reserved)
+        conflict = make_archive({
+            "modlist.txt": b"+A\\n",
+            "folder": b"file",
+            "folder/child.ini": b"child",
+        })
+        with self.assertRaises(core.ProfileError):
+            core.validate_profile_archive(conflict)
+
     def test_install_creates_new_profile_without_touching_active(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "profiles"
