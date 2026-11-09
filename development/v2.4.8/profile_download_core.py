@@ -354,6 +354,15 @@ def unseen(records, receipts):
     pending = []
     for record in records:
         old = receipts.get(record["id"])
-        if old is None or _version(record["version"]) > _version(old):
+        if old is None:
+            pending.append(record)
+            continue
+        try:
+            old_version = _version(old)
+        except ProfileError:
+            # A damaged or legacy receipt must not suppress a valid release.
+            pending.append(record)
+            continue
+        if _version(record["version"]) > old_version:
             pending.append(record)
     return pending
