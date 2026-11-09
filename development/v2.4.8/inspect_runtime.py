@@ -1,5 +1,7 @@
 # coding: utf-8
 import zipfile
+import sys
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 from pathlib import Path
 p=Path("update/releases/xingli_Little_assistant_v2.4.7_update.zip")
 with zipfile.ZipFile(p) as z:
