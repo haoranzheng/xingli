@@ -4,9 +4,9 @@
 
 ## 上传方式
 
-每个档案在 \`profiles/releases/\` 下建立一个独立文件夹，目录名使用小写英文 ID，例如：
+每个档案在 `profiles/releases/` 下建立一个独立文件夹，目录名使用小写英文 ID，例如：
 
-\`\`\`text
+```text
 profiles/
   releases/
     xingli-default/
@@ -18,13 +18,13 @@ profiles/
       archives.txt
       Skyrim.ini
       SkyrimPrefs.ini
-\`\`\`
+```
 
-将 MO2 的一个 Profile 文件夹中的实际内容复制到 \`profiles/releases/xingli-default/\`，再添加 \`profile.json\`。不要把外层 Profile 文件夹再嵌套一层。
+将 MO2 的一个 Profile 文件夹中的实际内容复制到 `profiles/releases/xingli-default/`，再添加 `profile.json`。不要把外层 Profile 文件夹再嵌套一层。
 
 ## profile.json 格式
 
-\`\`\`json
+```json
 {
   "id": "xingli-default",
   "name": "星黎默认档案",
@@ -32,23 +32,23 @@ profiles/
   "description": "适用版本与档案内容说明",
   "changelog": "首次发布"
 }
-\`\`\`
+```
 
-- \`id\` 必须与目录名完全一致，只能使用小写字母、数字、下划线和连字符。
-- \`name\` 是用户在下载中心看到的名称。
-- \`version\` 必须明确填写数字版本，例如 \`1.0.0\`，不使用日期作为版本依据。
-- \`description\` 和 \`changelog\` 为可选说明。
-- Profile 根目录必须有 \`modlist.txt\`。其他 MO2 档案文件会一并打包。
+- `id` 必须与目录名完全一致，只能使用小写字母、数字、下划线和连字符。
+- `name` 是用户在下载中心看到的名称。
+- `version` 必须明确填写数字版本，例如 `1.0.0`，不使用日期作为版本依据。
+- `description` 和 `changelog` 为可选说明。
+- Profile 根目录必须有 `modlist.txt`。其他 MO2 档案文件会一并打包。
 
 ## 发布流程
 
-1. 上传或更新 \`profiles/releases/<id>/\` 下的文件。
-2. 新档案首次发布时填写 \`1.0.0\`。
-3. 更新同一个档案时，必须提高 \`profile.json\` 中的版本号，例如 \`1.0.1\`；同一 ID + 版本的 ZIP 不允许被覆盖。
-4. 提交到 GitHub \`main\` 后，Actions 会检查文件、生成 ZIP、计算 SHA256，并更新 \`profiles/latest.json\`。
+1. 上传或更新 `profiles/releases/<id>/` 下的文件。
+2. 新档案首次发布时填写 `1.0.0`。
+3. 更新同一个档案时，必须提高 `profile.json` 中的版本号，例如 `1.0.1`；同一 ID + 版本的 ZIP 不允许被覆盖。
+4. 提交到 GitHub `main` 后，Actions 会检查文件、生成 ZIP、计算 SHA256，并更新 `profiles/latest.json`。
 5. 插件从 Gitee 国内镜像优先检查，GitHub 为备用源。
 
-用户下载时，插件会把 ZIP 解压为 MO2 \`profiles\` 目录中的一个新文件夹。已有同名档案会自动避让，不会覆盖当前档案，也不会自动切换或启用 MOD。
+用户下载时，插件会把 ZIP 解压为 MO2 `profiles` 目录中的一个新文件夹。已有同名档案会自动避让，不会覆盖当前档案，也不会自动切换或启用 MOD。
 
 ## 安全与限制
 
