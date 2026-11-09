@@ -1,0 +1,69 @@
+name: Publish Xingli MO2 profile folders
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'profiles/releases/**'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate-package-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test profile package publisher
+        shell: pwsh
+        run: |
+          python profiles/test_publish_profiles.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build immutable profile ZIP packages and catalog
+        shell: pwsh
+        run: |
+          python profiles/publish_profiles.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate catalog and every generated package
+        shell: pwsh
+        run: |
+          @'
+          import hashlib,json,pathlib,zipfile
+          root=pathlib.Path('.')
+          data=json.loads((root/'profiles/latest.json').read_text(encoding='utf-8-sig'))
+          assert data['schema']==1 and data['product']=='xingli_profile_downloads'
+          ids=set()
+          for item in data['profiles']:
+            assert item['id'] not in ids
+            ids.add(item['id'])
+            p=item['package']
+            path=root/'profiles/packages'/p['filename']
+            blob=path.read_bytes()
+            assert len(blob)==p['size']
+            assert hashlib.sha256(blob).hexdigest()==p['sha256']
+            with zipfile.ZipFile(path) as archive:
+              assert archive.testzip() is None
+              assert 'modlist.txt' in archive.namelist()
+          print('PROFILE_CATALOG_PUBLISH_VALID',len(ids))
+          '@ | Set-Content -LiteralPath validate_profiles.py -Encoding UTF8
+          python validate_profiles.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit generated package and catalog
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add profiles/latest.json profiles/packages
+          if (git diff --cached --quiet) {
+            Write-Host 'No new profile release or catalog changes.'
+            exit 0
+          }
+          git commit -m "Publish validated MO2 profile download catalog"
+          git push origin HEAD:main
