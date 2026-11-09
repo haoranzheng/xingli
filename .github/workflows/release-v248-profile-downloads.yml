@@ -1,0 +1,138 @@
+name: Xingli v2.4.8 profile downloads and temporary sort updater disable
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.4.8/**'
+      - 'profiles/**'
+      - '.github/workflows/release-v248-profile-downloads.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'development/v2.4.8/**'
+      - 'profiles/**'
+      - '.github/workflows/release-v248-profile-downloads.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test-build-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test profile download security and install behavior
+        shell: pwsh
+        run: |
+          python development/v2.4.8/test_profile_download.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test profile folder publisher and immutable versions
+        shell: pwsh
+        run: |
+          python profiles/test_publish_profiles.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build v2.4.8 runtime ZIP and updater manifest
+        shell: pwsh
+        run: |
+          python development/v2.4.8/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify exact runtime diff, sort disablement and profile UI wiring
+        shell: pwsh
+        run: |
+          @'
+          import ast, configparser, hashlib, io, json, pathlib, zipfile
+          root=pathlib.Path('.')
+          manifest=json.loads((root/'update/latest.json').read_text(encoding='utf-8-sig'))
+          assert manifest['version']=='2.4.8'
+          package=manifest['package']
+          path=root/'update/releases'/package['filename']
+          blob=path.read_bytes()
+          assert len(blob)==package['size']
+          assert hashlib.sha256(blob).hexdigest()==package['sha256']
+          assert package['mirrors'][0]['url'].startswith('https://gitee.com/')
+          old_path=root/'update/releases/xingli_Little_assistant_v2.4.7_update.zip'
+          with zipfile.ZipFile(old_path) as old, zipfile.ZipFile(path) as new:
+            assert old.testzip() is None and new.testzip() is None
+            a={x.filename:old.read(x) for x in old.infolist() if not x.is_dir()}
+            b={x.filename:new.read(x) for x in new.infolist() if not x.is_dir()}
+            assert not(set(a)-set(b))
+            assert {x for x in a if a[x]!=b[x]}=={
+              'xingli_Little_assistant/consolidation_controller.py',
+              'xingli_Little_assistant/version.ini'
+            }
+            assert set(b)-set(a)=={
+              'xingli_Little_assistant/profile_download_core.py',
+              'xingli_Little_assistant/profile_download_ui.py',
+              'xingli_Little_assistant/CHANGELOG_v2.4.8.md'
+            }
+            assert b['xingli_Little_assistant/sort_update_core.py']==a['xingli_Little_assistant/sort_update_core.py']
+            assert b['xingli_Little_assistant/sort_update_ui.py']==a['xingli_Little_assistant/sort_update_ui.py']
+            assert b['xingli_Little_assistant/auto_updater.py']==a['xingli_Little_assistant/auto_updater.py']
+            assert b['xingli_Little_assistant/modpack_updater.py']==a['xingli_Little_assistant/modpack_updater.py']
+            controller=b['xingli_Little_assistant/consolidation_controller.py'].decode('utf-8')
+            assert 'sort_update_ui' not in controller
+            assert 'show_sort_updates' not in controller
+            assert '排序备份更新' not in controller
+            assert 'profile_download_ui.startup_check(self)' in controller
+            assert 'profile_download_ui.show_center(self)' in controller
+            assert '📁  档案下载' in controller
+            config=configparser.ConfigParser()
+            config.read_file(io.StringIO(b['xingli_Little_assistant/version.ini'].decode('utf-8')))
+            assert config.get('Version','local')=='2.4.8'
+            for name,data in b.items():
+              if name.endswith('.py'):
+                ast.parse(data.decode('utf-8-sig'),filename=name,feature_version=(3,8))
+          print('V248_RUNTIME_DIFF_AND_SHA256_PASS',len(blob),package['sha256'])
+          '@ | Set-Content -LiteralPath verify_v248.py -Encoding UTF8
+          python verify_v248.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Existing modpack, Nexus, archive and sorting regressions
+        shell: pwsh
+        run: |
+          python development/v2.4.6/test_modpack_confirmation.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.5/test_nexus_repair_service.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.4/test_nexus_archive_metadata.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.3/test_mirror_reliability.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_raw_sort.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.1/test_sort_updates.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish v2.4.8 package after merge to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'xingli-v248'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          Copy-Item update/latest.json "$dir/latest.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.4.8_update.zip "$dir/update.zip"
+          git fetch origin main
+          git checkout -B publish-v248 origin/main
+          @'
+          import json,pathlib
+          m=json.loads(pathlib.Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          if m.get('version') not in ('2.4.7','2.4.8'):
+            raise SystemExit('Unexpected current updater version '+str(m.get('version')))
+          '@ | Set-Content -LiteralPath guard_v248.py -Encoding UTF8
+          python guard_v248.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$dir/latest.json" update/latest.json
+          Copy-Item "$dir/update.zip" update/releases/xingli_Little_assistant_v2.4.8_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.4.8_update.zip
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "Publish Xingli v2.4.8 profile download feature"
+          git push origin HEAD:main
