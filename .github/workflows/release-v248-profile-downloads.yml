@@ -106,7 +106,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python development/v2.4.2/test_raw_sort.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python development/v2.4.1/test_sort_updates.py
+          python development/v2.4.2/test_staged_sort_manifest.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Publish v2.4.8 package after merge to main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
