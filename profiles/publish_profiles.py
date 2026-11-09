@@ -15,6 +15,10 @@ PACKAGE_ROOT = PROFILE_ROOT / "packages"
 MANIFEST_PATH = PROFILE_ROOT / "latest.json"
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,63}$")
 VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+){0,3}$")
+WINDOWS_RESERVED = {"CON", "PRN", "AUX", "NUL"} | {
+    "{}{}".format(prefix, number)
+    for prefix in ("COM", "LPT") for number in range(1, 10)
+}
 MAX_FILES = 500
 MAX_FILE = 32 * 1024 * 1024
 MAX_TOTAL = 128 * 1024 * 1024
@@ -43,7 +47,9 @@ def _safe_relative(path):
         or ":" in relative
         or any(part in ("", ".", "..") for part in parts)
         or any(part.endswith((".", " ")) for part in parts)
+        or any(part.split(".", 1)[0].upper() in WINDOWS_RESERVED for part in parts)
         or any(ord(ch) < 32 for ch in relative)
+        or len(relative) > 220
     ):
         raise PublishError("Profile 中包含不安全路径：" + relative)
     return relative
@@ -108,6 +114,9 @@ def _collect_files(folder):
     folded = [name.casefold() for name, _data in entries]
     if len(folded) != len(set(folded)):
         raise PublishError("Profile 包含 Windows 下大小写冲突的文件名")
+    for index, name in enumerate(folded):
+        if any(other.startswith(name + "/") for other in folded[index + 1:]):
+            raise PublishError("Profile 包含文件与目录路径冲突：" + name)
     return entries
 
 
