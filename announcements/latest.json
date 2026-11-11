@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "product": "xingli_announcements",
+  "announcements": [
+    {
+      "id": "xingli-shader-update-20261111",
+      "revision": 1,
+      "category": "shader",
+      "published_at": "2026-11-11",
+      "title": "星黎个人定制着色器已更新",
+      "message": "星黎个人定制版着色器模组已发布更新。请按需前往网盘下载最新文件。此次公告仅提供下载信息，不会自动覆盖已安装的着色器或修改整合包排序。着色器具体版本与更新说明以发布文件为准。",
+      "links": [
+        {
+          "name": "夸克网盘",
+          "url": "https://pan.quark.cn/s/ff5ece3e4cb7",
+          "code": ""
+        },
+        {
+          "name": "百度网盘",
+          "url": "https://pan.baidu.com/s/18Vtwns7Kj8JpWU_vELsbxw?pwd=p58j",
+          "code": "p58j"
+        }
+      ]
+    }
+  ]
+}
