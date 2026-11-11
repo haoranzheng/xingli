@@ -2,22 +2,22 @@
   "schema": 2,
   "product": "xingli_Little_assistant",
   "channel": "stable",
-  "version": "2.4.9",
-  "title": "星黎 MO2 小助手 2.4.9：独立模组更新公告",
-  "published_at": "2026-11-11T02:44:58+00:00",
-  "changelog": "新增星黎模组更新公告通道：推送个人定制着色器下载信息，支持夸克网盘与百度网盘，可选择稍后提醒或不再提醒，并支持后续独立公告无需升级插件。不更改整合包版本、当前 MOD、排序或档案功能。",
+  "version": "2.5.0",
+  "title": "星黎 MO2 小助手 2.5.0：修复窗口遮挡与关闭顺序",
+  "published_at": "2026-11-11T03:01:33+00:00",
+  "changelog": "修复着色器更新公告窗口显示在星黎主界面后方、导致无法正常关闭的缺陷；同步修复档案下载、MOD 更新及插件更新提示的窗口归属，统一子窗口模态显示；教程/ENB/分辨率窗口也明确绑定主界面。不修改 MOD、排序、整合包版本或着色器文件。",
   "package": {
-    "filename": "xingli_Little_assistant_v2.4.9_update.zip",
-    "size": 284149,
-    "sha256": "f908c4a5a14fc4f7867184edb8a76f67c656e4a35a99bcebe025c4b48ccc27f7",
+    "filename": "xingli_Little_assistant_v2.5.0_update.zip",
+    "size": 285910,
+    "sha256": "3e6e1779d077cdc5b82bed65152dafe96a775ba526dba9cab63cab6515c4b3bd",
     "mirrors": [
       {
         "name": "Gitee 国内主源",
-        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.4.9_update.zip"
+        "url": "https://gitee.com/HR-world/xingli/raw/main/update/releases/xingli_Little_assistant_v2.5.0_update.zip"
       },
       {
         "name": "GitHub 备用源",
-        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.4.9_update.zip"
+        "url": "https://raw.githubusercontent.com/haoranzheng/xingli/main/update/releases/xingli_Little_assistant_v2.5.0_update.zip"
       }
     ]
   }
