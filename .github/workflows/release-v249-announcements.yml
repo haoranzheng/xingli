@@ -1,0 +1,147 @@
+name: Xingli v2.4.9 independent shader announcement channel
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.4.9/**'
+      - 'announcements/**'
+      - '.github/workflows/release-v249-announcements.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'development/v2.4.9/**'
+      - '.github/workflows/release-v249-announcements.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  verify-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate remote cloud links and announcement receipts
+        shell: pwsh
+        run: |
+          python development/v2.4.9/test_announcements.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install PyQt6 for offscreen integration verification
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check "PyQt6>=6.7,<6.11"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test real Qt announcement buttons and unread states
+        shell: pwsh
+        run: |
+          python development/v2.4.9/test_announcement_qt.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build v2.4.9 self-update package
+        shell: pwsh
+        run: |
+          python development/v2.4.9/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify strict runtime delta and packaged INI/changelog integrity
+        shell: pwsh
+        run: |
+          @'
+          import ast,configparser,hashlib,io,json,pathlib,zipfile
+          root=pathlib.Path('.')
+          latest=json.loads((root/'update/latest.json').read_text(encoding='utf-8-sig'))
+          assert latest['version']=='2.4.9'
+          pkg=latest['package']
+          blob=(root/'update/releases'/pkg['filename']).read_bytes()
+          assert len(blob)==pkg['size']
+          assert hashlib.sha256(blob).hexdigest()==pkg['sha256']
+          assert pkg['mirrors'][0]['url'].startswith('https://gitee.com/')
+          with zipfile.ZipFile(root/'update/releases/xingli_Little_assistant_v2.4.8_update.zip') as old,zipfile.ZipFile(io.BytesIO(blob)) as new:
+            assert old.testzip() is None and new.testzip() is None
+            a={f.filename:old.read(f) for f in old.infolist() if not f.is_dir()}
+            b={f.filename:new.read(f) for f in new.infolist() if not f.is_dir()}
+            assert not(set(a)-set(b))
+            assert {name for name in a if a[name]!=b[name]}=={
+              'xingli_Little_assistant/consolidation_controller.py',
+              'xingli_Little_assistant/version.ini'
+            }
+            assert set(b)-set(a)=={
+              'xingli_Little_assistant/announcement_core.py',
+              'xingli_Little_assistant/announcement_ui.py',
+              'xingli_Little_assistant/CHANGELOG_v2.4.9.md'
+            }
+            controller=b['xingli_Little_assistant/consolidation_controller.py'].decode('utf-8')
+            assert 'announcement_ui.startup_check(self)' in controller
+            assert 'announcement_ui.show_center(self)' in controller
+            assert 'sort_update_ui' not in controller
+            assert 'show_sort_updates' not in controller
+            assert 'profile_download_ui.startup_check(self)' in controller
+            for module in (
+              'auto_updater.py', 'modpack_updater.py', 'profile_download_core.py',
+              'profile_download_ui.py', 'nexus_archive_metadata.py', 'nexus_repair_service.py',
+              'modpack_confirmation.py','sort_update_core.py','sort_update_ui.py'
+            ):
+              path='xingli_Little_assistant/'+module
+              assert a[path]==b[path], module
+            config=configparser.ConfigParser()
+            config.read_file(io.StringIO(b['xingli_Little_assistant/version.ini'].decode('utf-8')))
+            assert config.get('Version','local')=='2.4.9'
+            for name,value in b.items():
+              if name.endswith('.py'):
+                ast.parse(value.decode('utf-8-sig'),filename=name,feature_version=(3,8))
+          announcement=json.loads((root/'announcements/latest.json').read_text(encoding='utf-8-sig'))
+          assert announcement['announcements'][0]['links'][1]['code']=='p58j'
+          print('V249_SHADER_ANNOUNCEMENT_PACKAGE_PASS',len(blob),pkg['sha256'])
+          '@ | Set-Content verify_v249.py -Encoding UTF8
+          python verify_v249.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Existing modpack, Nexus, profile and sort regression tests
+        shell: pwsh
+        run: |
+          python development/v2.4.8/test_profile_download.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python profiles/test_publish_profiles.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.6/test_modpack_confirmation.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.5/test_nexus_repair_service.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.4/test_nexus_archive_metadata.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.3/test_mirror_reliability.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.2/test_raw_sort.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish the validated self-update ZIP to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir=Join-Path $env:RUNNER_TEMP 'xingli-v249'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          Copy-Item update/latest.json "$dir/latest.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.4.9_update.zip "$dir/update.zip"
+          git fetch origin main
+          git checkout -B publish-v249 origin/main
+          @'
+          import json,pathlib
+          p=pathlib.Path('update/latest.json')
+          obj=json.loads(p.read_text(encoding='utf-8-sig'))
+          assert obj.get('version') in ('2.4.8','2.4.9'), 'unexpected updater manifest version'
+          '@ | Set-Content guard_v249.py -Encoding UTF8
+          python guard_v249.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$dir/latest.json" update/latest.json
+          Copy-Item "$dir/update.zip" update/releases/xingli_Little_assistant_v2.4.9_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.4.9_update.zip
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "Publish Xingli v2.4.9 independent shader announcements"
+          git push origin HEAD:main
