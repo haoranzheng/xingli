@@ -1,0 +1,49 @@
+name: Inspect Xingli 2.2.0 source (development only)
+on:
+  push:
+    branches: [feature/startup-update-rollback-v23]
+    paths:
+      - '.github/workflows/v230-inspect.yml'
+permissions:
+  contents: write
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Extract runtime sources for integration
+        run: |
+          python - <<'PY'
+          import zipfile, pathlib, json
+          package=pathlib.Path('update/releases/xingli_Little_assistant_v2.2.0_update.zip')
+          dest=pathlib.Path('development/v2.3.0/v220_sources')
+          dest.mkdir(parents=True,exist_ok=True)
+          with zipfile.ZipFile(package) as z:
+              names=z.namelist()
+              (dest/'FILES.json').write_text(json.dumps(names,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+              count=0
+              for name in names:
+                  rel=pathlib.PurePosixPath(name)
+                  if len(rel.parts)<2 or rel.parts[0]!='xingli_Little_assistant':
+                      continue
+                  if not name.endswith(('.py','.ps1','.bat','.ini','.md','.json')):
+                      continue
+                  if any(x in rel.parts for x in ('__pycache__', '_XingliState')):
+                      continue
+                  target=dest.joinpath(*rel.parts[1:])
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(z.read(name))
+                  count+=1
+              print('Extracted sources:',count)
+          PY
+      - name: Commit inspected reference files to development branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add development/v2.3.0/v220_sources
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: expose v2.2.0 plugin source for updater integration"
+            git push origin HEAD:feature/startup-update-rollback-v23
+          fi

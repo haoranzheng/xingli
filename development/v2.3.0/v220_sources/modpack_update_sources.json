@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "timeout_seconds": 8,
+  "manifest_urls": [
+    "https://gitee.com/HR-world/xingli/raw/main/modpack/latest.json",
+    "https://raw.githubusercontent.com/haoranzheng/xingli/main/modpack/latest.json"
+  ]
+}

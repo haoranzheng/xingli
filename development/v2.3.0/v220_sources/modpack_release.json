@@ -1,0 +1,8 @@
+{
+  "schema": 2,
+  "pack_id": "xingli-skyrim",
+  "name": "星黎整合包",
+  "installed_version": "3.3.1",
+  "bootstrap_only": true,
+  "note": "首次迁移到持久版本记录。后续整合包更新应在 MO2 根目录写入 xingli_modpack_release.json。"
+}
