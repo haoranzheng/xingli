@@ -1,0 +1,151 @@
+name: Xingli v2.5.0 fix modal dialog ownership and z-order
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'development/v2.5.0/**'
+      - '.github/workflows/release-v250-dialogs.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'development/v2.5.0/**'
+      - '.github/workflows/release-v250-dialogs.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  verify-publish:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build v2.5.0 from published v2.4.9 ZIP
+        shell: pwsh
+        run: |
+          python development/v2.5.0/build_release.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test v2.5.0 child window z-order and close workflow (Qt6)
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check "PyQt6>=6.7,<6.11"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.5.0/test_dialog_ownership.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.9/test_announcement_qt.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test v2.5.0 child window z-order and close workflow (Qt5)
+        shell: pwsh
+        run: |
+          python -m pip uninstall -y PyQt6 PyQt6-Qt6 PyQt6-sip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install --disable-pip-version-check "PyQt5>=5.15,<5.16"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.5.0/test_dialog_ownership.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify exact ZIP delta, integrity, ownership and version.ini
+        shell: pwsh
+        run: |
+          @'
+          import ast,configparser,hashlib,io,json,pathlib,zipfile
+          root=pathlib.Path('.')
+          m=json.loads((root/'update/latest.json').read_text(encoding='utf-8-sig'))
+          assert m['version']=='2.5.0'
+          pkg=m['package']
+          path=root/'update/releases'/pkg['filename']
+          blob=path.read_bytes()
+          assert len(blob)==pkg['size'] and hashlib.sha256(blob).hexdigest()==pkg['sha256']
+          assert pkg['mirrors'][0]['url'].startswith('https://gitee.com/')
+          with zipfile.ZipFile(root/'update/releases/xingli_Little_assistant_v2.4.9_update.zip') as old,zipfile.ZipFile(io.BytesIO(blob)) as new:
+            assert old.testzip() is None and new.testzip() is None
+            a={x.filename:old.read(x) for x in old.infolist() if not x.is_dir()}
+            b={x.filename:new.read(x) for x in new.infolist() if not x.is_dir()}
+            assert not(set(a)-set(b))
+            assert {k for k in a if a[k]!=b[k]}=={
+              'xingli_Little_assistant/consolidation_controller.py',
+              'xingli_Little_assistant/announcement_ui.py',
+              'xingli_Little_assistant/profile_download_ui.py',
+              'xingli_Little_assistant/mod_update_ui.py',
+              'xingli_Little_assistant/sort_update_ui.py',
+              'xingli_Little_assistant/auto_updater.py',
+              'xingli_Little_assistant/version.ini'
+            }
+            assert set(b)-set(a)=={
+              'xingli_Little_assistant/dialog_ownership.py',
+              'xingli_Little_assistant/CHANGELOG_v2.5.0.md'
+            }
+            config=configparser.ConfigParser()
+            config.read_file(io.StringIO(b['xingli_Little_assistant/version.ini'].decode('utf-8')))
+            assert config.get('Version','local')=='2.5.0'
+            ctl=b['xingli_Little_assistant/consolidation_controller.py'].decode('utf-8')
+            assert 'sort_update_ui' not in ctl and 'show_sort_updates' not in ctl
+            assert 'announcement_ui.startup_check(self)' in ctl
+            assert 'profile_download_ui.startup_check(self)' in ctl
+            for path in (
+              'modpack_updater.py','modpack_confirmation.py',
+              'announcement_core.py','profile_download_core.py',
+              'nexus_repair_ui.py','nexus_repair_service.py',
+              'nexus_archive_metadata.py','mod_manager.py','user_assistant.py'
+            ):
+              key='xingli_Little_assistant/'+path
+              assert a[key]==b[key],path
+            for name,data in b.items():
+              if name.endswith('.py'):
+                ast.parse(data.decode('utf-8-sig'),filename=name,feature_version=(3,8))
+          print('V250_OWNERSHIP_PACKAGE_VERIFIED',len(blob),pkg['sha256'])
+          '@ | Set-Content verify_v250.py -Encoding UTF8
+          python verify_v250.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Existing announcement, profile, modpack, Nexus and update regressions
+        shell: pwsh
+        run: |
+          python development/v2.4.9/test_announcements.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.8/test_profile_download.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python profiles/test_publish_profiles.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.5.0/test_package_version.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.6/test_modpack_confirmation.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.5/test_nexus_repair_service.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.4/test_nexus_archive_metadata.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python development/v2.4.3/test_mirror_reliability.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish v2.5.0 package to main only after all tests pass
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir=Join-Path $env:RUNNER_TEMP 'xingli-v250'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          Copy-Item update/latest.json "$dir/latest.json"
+          Copy-Item update/releases/xingli_Little_assistant_v2.5.0_update.zip "$dir/update.zip"
+          git fetch origin main
+          git checkout -B publish-v250 origin/main
+          @'
+          import pathlib,json
+          data=json.loads(pathlib.Path('update/latest.json').read_text(encoding='utf-8-sig'))
+          assert data['version'] in ('2.4.9','2.5.0'), 'unexpected latest release baseline'
+          '@ | Set-Content guard_v250.py -Encoding UTF8
+          python guard_v250.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$dir/latest.json" update/latest.json
+          Copy-Item "$dir/update.zip" update/releases/xingli_Little_assistant_v2.5.0_update.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update/latest.json update/releases/xingli_Little_assistant_v2.5.0_update.zip
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "Release v2.5.0 owned Qt dialogs and z-order repair"
+          git push origin HEAD:main
