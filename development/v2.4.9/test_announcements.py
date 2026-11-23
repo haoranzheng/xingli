@@ -29,16 +29,27 @@ class Tests(unittest.TestCase):
 
     def test_live_shader_announcement_exact_user_links(self):
         self.assertEqual(self.live["product"], core.PRODUCT)
-        self.assertEqual(len(self.items), 1)
-        item = self.items[0]
-        self.assertEqual(item["title"], "星黎个人定制着色器已更新")
-        self.assertEqual(item["category"], "shader")
-        self.assertEqual([x["url"] for x in item["links"]], [
+        self.assertGreaterEqual(len(self.items), 2)
+        records = {item["id"]: item for item in self.items}
+        previous = records["xingli-shader-update-20261111"]
+        self.assertEqual(previous["title"], "星黎个人定制着色器已更新")
+        self.assertEqual([x["url"] for x in previous["links"]], [
             "https://pan.quark.cn/s/ff5ece3e4cb7",
             "https://pan.baidu.com/s/18Vtwns7Kj8JpWU_vELsbxw?pwd=p58j",
         ])
-        self.assertEqual(item["links"][1]["code"], "p58j")
-        self.assertNotIn("DLSS 5", item["message"])
+        self.assertEqual(previous["links"][1]["code"], "p58j")
+
+        latest = records["xingli-shader-update-20261123"]
+        self.assertEqual(latest["title"], "着色器新版本更新")
+        self.assertEqual(latest["category"], "shader")
+        self.assertEqual(latest["published_at"], "2026-11-23")
+        self.assertIn("稳定性", latest["message"])
+        self.assertIn("dlss5", latest["message"])
+        self.assertEqual([x["url"] for x in latest["links"]], [
+            "https://pan.baidu.com/s/1jUwL8Qp9MdB8WckIEzqezg?pwd=6mtj",
+            "https://pan.quark.cn/s/58334d5462a1",
+        ])
+        self.assertEqual(latest["links"][0]["code"], "6mtj")
 
     def test_block_redirector_and_untrusted_pages(self):
         for url in (
@@ -68,7 +79,8 @@ class Tests(unittest.TestCase):
             path = core.receipt_path(organizer)
             item = self.items[0]
             self.assertEqual(core.unseen(self.items, core.read_receipts(path)), self.items)
-            core.mark_seen(path, item)
+            for record in self.items:
+                core.mark_seen(path, record)
             self.assertEqual(core.unseen(self.items, core.read_receipts(path)), [])
             updated = dict(item, revision=item["revision"] + 1)
             self.assertEqual(core.unseen([updated], core.read_receipts(path)), [updated])

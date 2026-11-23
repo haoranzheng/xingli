@@ -21,6 +21,26 @@
           "code": "p58j"
         }
       ]
+    },
+    {
+      "id": "xingli-shader-update-20261123",
+      "revision": 1,
+      "category": "shader",
+      "published_at": "2026-11-23",
+      "title": "着色器新版本更新",
+      "message": "着色器新版本更新，优化了稳定性以及修复了一些功能bug，如果打开游戏法线着色器不编译可以强制关闭着色器再打开一次，以下是下载地址：\n\n度盘链接: https://pan.baidu.com/s/1jUwL8Qp9MdB8WckIEzqezg?pwd=6mtj 提取码: 6mtj\n夸克链接：https://pan.quark.cn/s/58334d5462a1\n\n写给某位整合达人：不会测评请不要乱说，拿着自己开的dlss5说是我做的有问题，很可笑不是吗？你说的公正的给大家看看，整个视频充满了你的主观评价，我也不想更多公开说你了，毕竟你干的那些破事也多少人不知道的。",
+      "links": [
+        {
+          "name": "百度网盘",
+          "url": "https://pan.baidu.com/s/1jUwL8Qp9MdB8WckIEzqezg?pwd=6mtj",
+          "code": "6mtj"
+        },
+        {
+          "name": "夸克网盘",
+          "url": "https://pan.quark.cn/s/58334d5462a1",
+          "code": ""
+        }
+      ]
     }
   ]
 }
