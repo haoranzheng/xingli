@@ -19,7 +19,16 @@ _spec.loader.exec_module(checker)
 
 class StagedCatalogTests(unittest.TestCase):
     def test_checked_out_catalog_matches_committed_release_bytes(self):
-        self.assertEqual(checker.verify_staged_catalog(ROOT), 4)
+        self.assertEqual(checker.verify_staged_catalog(ROOT), 0)
+
+    def test_revoked_sort_catalog_has_no_published_releases(self):
+        with (ROOT / "sort/latest.json").open(encoding="utf-8") as handle:
+            catalog = json.load(handle)
+        self.assertEqual(checker.core.validate_manifest(catalog), [])
+        self.assertEqual(catalog["releases"], [])
+        for directory in ("sort/releases", "sort/inbox"):
+            folder = ROOT / directory
+            self.assertFalse(folder.exists() and any(folder.rglob("*.txt")))
 
     def test_normalized_staged_bytes_reject_worktree_crlf_hash(self):
         original = b"+Example\r\n"
