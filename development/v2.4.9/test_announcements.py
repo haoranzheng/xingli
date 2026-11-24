@@ -29,7 +29,7 @@ class Tests(unittest.TestCase):
 
     def test_live_shader_announcement_exact_user_links(self):
         self.assertEqual(self.live["product"], core.PRODUCT)
-        self.assertGreaterEqual(len(self.items), 2)
+        self.assertGreaterEqual(len(self.items), 3)
         records = {item["id"]: item for item in self.items}
         previous = records["xingli-shader-update-20261111"]
         self.assertEqual(previous["title"], "星黎个人定制着色器已更新")
@@ -50,6 +50,19 @@ class Tests(unittest.TestCase):
             "https://pan.quark.cn/s/58334d5462a1",
         ])
         self.assertEqual(latest["links"][0]["code"], "6mtj")
+
+        newest = records["xingli-shader-update-20261124"]
+        self.assertEqual(newest["revision"], 1)
+        self.assertEqual(newest["category"], "shader")
+        self.assertEqual(newest["published_at"], "2026-11-24")
+        self.assertIn("20%", newest["message"])
+        self.assertIn("FSR 4.1", newest["message"])
+        self.assertIn("着色器缓存", newest["message"])
+        self.assertEqual([link["url"] for link in newest["links"]], [
+            "https://pan.baidu.com/s/1rf5KJy8QJ8FxickiFAjvLQ?pwd=yn8u",
+            "https://pan.quark.cn/s/8ec0318842b6",
+        ])
+        self.assertEqual(newest["links"][0]["code"], "yn8u")
 
     def test_block_redirector_and_untrusted_pages(self):
         for url in (

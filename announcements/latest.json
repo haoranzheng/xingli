@@ -41,6 +41,26 @@
           "code": ""
         }
       ]
+    },
+    {
+      "id": "xingli-shader-update-20261124",
+      "revision": 1,
+      "category": "shader",
+      "published_at": "2026-11-24",
+      "title": "星黎着色器 11.24 更新：性能与稳定性优化、支持 FSR 4.1",
+      "message": "星黎着色器 11.24 版本更新，包含以下性能优化与稳定性调整，预计提升约 20% 的性能（实际提升因设备和场景而异）：\n\n1. 光照系统：优化主材质着色器、点光源剔除与光照计算，减少无效光照开销。\n2. SSGI / GTAO：优化射线步进、时域降噪、历史数据处理及显存占用。\n3. 体积雾：引入并行深度归约，跳过无效光散射计算。\n4. DLSS-NR：减少深度纹理转换和重复运动向量采样，降低重建前处理开销。\n5. 后处理：优化自动曝光、局部曝光及动态模糊资源管理。\n6. 环境渲染：优化 IBL、Skylighting、动态立方体贴图、草地及阴影采样。\n7. CPU 性能：减少重复查询、锁竞争及不必要的资源创建。\n8. 着色器缓存：完善缓存识别、异步编译和缓存失效机制，减少编译卡顿及缓存冲突。\n\n本次更新新增对 FSR 4.1 的支持，强烈推荐大家下载！\n\n百度网盘：https://pan.baidu.com/s/1rf5KJy8QJ8FxickiFAjvLQ?pwd=yn8u\n提取码：yn8u\n夸克网盘：https://pan.quark.cn/s/8ec0318842b6",
+      "links": [
+        {
+          "name": "百度网盘",
+          "url": "https://pan.baidu.com/s/1rf5KJy8QJ8FxickiFAjvLQ?pwd=yn8u",
+          "code": "yn8u"
+        },
+        {
+          "name": "夸克网盘",
+          "url": "https://pan.quark.cn/s/8ec0318842b6",
+          "code": ""
+        }
+      ]
     }
   ]
 }
